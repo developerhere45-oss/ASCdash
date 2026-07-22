@@ -55,7 +55,7 @@ export default function CompanyRegisterPage() {
       const logoData = new FormData(); logoData.append("photo", files.logo!);
       const logoResponse = await fetch(`${companyBackendUrl}/api/partners/profile-photo`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: logoData });
       if (!logoResponse.ok) throw new Error("Company logo upload failed.");
-      router.replace("/company/dashboard?registered=1");
+      router.replace("/company/verification?registered=1");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Registration failed."); }
     finally { setLoading(false); }
   }

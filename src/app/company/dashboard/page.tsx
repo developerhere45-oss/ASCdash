@@ -46,8 +46,14 @@ export default function CompanyDashboardPage() {
       const profilePayload = await profileResponse.json().catch(() => ({}));
       const bookingPayload = await bookingResponse.json().catch(() => ({}));
       if (!profileResponse.ok) throw new Error(profilePayload.message || "Company profile unavailable.");
+      const nextPartner = (profilePayload.partner || profilePayload) as Row;
+      const approved = nextPartner.businessVerificationStatus === "approved" && nextPartner.kycStatus === "verified" && nextPartner.isVerified === true && nextPartner.trustStatus === "trusted" && nextPartner.accountStatus !== "blocked" && nextPartner.accountStatus !== "suspended";
+      if (!approved) {
+        router.replace("/company/verification");
+        return;
+      }
       const nextBookings: Row[] = bookingResponse.ok ? (Array.isArray(bookingPayload.bookings) ? bookingPayload.bookings : Array.isArray(bookingPayload) ? bookingPayload : []) : [];
-      setPartner(profilePayload.partner || profilePayload);
+      setPartner(nextPartner);
       setBookings(nextBookings);
       if (initializedIds.current) {
         const fresh = nextBookings.find((booking) => idOf(booking) && !knownIds.current.has(idOf(booking)));
@@ -58,7 +64,7 @@ export default function CompanyDashboardPage() {
       setError("");
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Live data unavailable."); }
     finally { setLoading(false); setRefreshing(false); }
-  }, []);
+  }, [router]);
 
   useEffect(() => onAuthStateChanged(companyFirebaseAuth(), (current) => {
     if (!current) { router.replace("/company/login"); return; }

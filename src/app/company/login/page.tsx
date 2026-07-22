@@ -21,6 +21,11 @@ export default function CompanyLoginPage() {
     const partner = payload.partner || payload;
     if (!response.ok || !partner?._id) throw new Error(payload.message || "No company registration found for this Google account.");
     if (partner.businessType !== "laundry") throw new Error("This Google account is not registered as a company owner.");
+    const approved = partner.businessVerificationStatus === "approved" && partner.kycStatus === "verified" && partner.isVerified === true && partner.trustStatus === "trusted" && partner.accountStatus !== "blocked" && partner.accountStatus !== "suspended";
+    if (!approved) {
+      router.replace("/company/verification");
+      return;
+    }
     router.replace("/company/dashboard");
   }
 
