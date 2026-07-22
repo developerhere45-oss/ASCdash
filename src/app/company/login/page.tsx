@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, ShieldCheck } from "lucide-react";
 import { FirebaseError } from "firebase/app";
-import { signInWithPopup } from "firebase/auth";
-import { useState } from "react";
+import { getRedirectResult, signInWithRedirect, type User } from "firebase/auth";
+import { useEffect, useState } from "react";
 import { CompanyBrand, GoogleMark } from "@/components/company/company-brand";
 import { companyBackendUrl, companyFirebaseAuth, companyGoogleProvider } from "@/lib/company-firebase";
 
@@ -14,33 +14,47 @@ export default function CompanyLoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  async function finishCompanyLogin(user: User) {
+    const token = await user.getIdToken(true);
+    const response = await fetch(`${companyBackendUrl}/api/partners/me`, { headers: { Authorization: `Bearer ${token}` } });
+    const payload = await response.json().catch(() => ({}));
+    const partner = payload.partner || payload;
+    if (!response.ok || !partner?._id) throw new Error(payload.message || "No company registration found for this Google account.");
+    if (partner.businessType !== "laundry") throw new Error("This Google account is not registered as a company owner.");
+    router.replace("/company/dashboard");
+  }
+
+  function showLoginError(caught: unknown) {
+    if (caught instanceof FirebaseError) {
+      const messages: Record<string, string> = {
+        "auth/unauthorized-domain": "This Render domain is not authorized in Firebase Authentication.",
+        "auth/operation-not-allowed": "Google login is not enabled in Firebase Authentication.",
+        "auth/popup-blocked": "Google sign-in was blocked. Please try again.",
+        "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+        "auth/internal-error": "Firebase could not start Google sign-in. Verify the Web App config and Authorized Domain.",
+      };
+      setError(messages[caught.code] || `Google sign-in failed (${caught.code}).`);
+    } else {
+      setError(caught instanceof Error ? caught.message : "Google login failed. Please try again.");
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    getRedirectResult(companyFirebaseAuth()).then((result) => {
+      if (!active || !result?.user) return;
+      setLoading(true);
+      return finishCompanyLogin(result.user);
+    }).catch((caught) => { if (active) showLoginError(caught); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
   async function loginWithGoogle() {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
-      const result = await signInWithPopup(companyFirebaseAuth(), companyGoogleProvider);
-      const token = await result.user.getIdToken(true);
-      const response = await fetch(`${companyBackendUrl}/api/partners/me`, { headers: { Authorization: `Bearer ${token}` } });
-      const payload = await response.json().catch(() => ({}));
-      const partner = payload.partner || payload;
-      if (!response.ok || !partner?._id) throw new Error(payload.message || "No company registration found for this Google account.");
-      if (partner.businessType !== "laundry") throw new Error("This Google account is not registered as a company owner.");
-      router.replace("/company/dashboard");
+      await signInWithRedirect(companyFirebaseAuth(), companyGoogleProvider);
     } catch (caught) {
-      if (caught instanceof FirebaseError) {
-        const messages: Record<string, string> = {
-          "auth/unauthorized-domain": "This Render domain is not authorized in Firebase Authentication.",
-          "auth/operation-not-allowed": "Google login is not enabled in Firebase Authentication.",
-          "auth/popup-blocked": "Google popup was blocked. Please allow popups and try again.",
-          "auth/popup-closed-by-user": "Google sign-in was cancelled.",
-          "auth/internal-error": "Google authentication could not start. Check Firebase Authorized Domains and try again.",
-        };
-        setError(messages[caught.code] || `Google sign-in failed (${caught.code}).`);
-      } else {
-        setError(caught instanceof Error ? caught.message : "Google login failed. Please try again.");
-      }
-    } finally {
-      setLoading(false);
+      showLoginError(caught); setLoading(false);
     }
   }
 
