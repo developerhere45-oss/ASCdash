@@ -12,7 +12,7 @@ type UploadKey = "license" | "ownerId" | "logo";
 
 export default function CompanyRegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ companyName: "", licenseNumber: "", ownerName: "", ownerEmail: "", ownerMobile: "", address: "", areaDraft: "" });
+  const [form, setForm] = useState({ companyName: "", companyService: "cleaning", licenseNumber: "", ownerName: "", ownerEmail: "", ownerMobile: "", address: "", areaDraft: "" });
   const [areas, setAreas] = useState<string[]>([]);
   const [files, setFiles] = useState<Partial<Record<UploadKey, File>>>({});
   const [loading, setLoading] = useState(false);
@@ -44,7 +44,7 @@ export default function CompanyRegisterPage() {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           name: form.ownerName, phone: form.ownerMobile, email: form.ownerEmail.trim().toLowerCase(), businessType: "laundry",
-          serviceCategory: ["laundry", "cleaning"], city: areas[0], serviceArea: form.address, workingAreas: areas,
+          serviceCategory: [form.companyService], city: areas[0], serviceArea: form.address, workingAreas: areas,
           residentialAddress: form.address, isOnline: false,
           laundryBusiness: { shopName: form.companyName, shopLicenseNumber: form.licenseNumber, shopLocation: form.address, ownerName: form.ownerName, ownerPhone: form.ownerMobile, staffMembers: [] }
         })
@@ -86,6 +86,7 @@ export default function CompanyRegisterPage() {
           <span><Headphones /><b>24/7 Support</b><small>We&apos;re here to help you</small></span>
         </div>
         <div className="company-form-grid">
+          <div className="company-field company-field-wide"><label>Company Service <b>*</b></label><div><Building2/><select value={form.companyService} onChange={(event) => update("companyService", event.target.value)}><option value="cleaning">Cleaning Company</option><option value="laundry">Laundry Company</option></select></div></div>
           <CompanyField label="Company Name" value={form.companyName} onChange={(v) => update("companyName", v)} icon={<Building2 />} placeholder="Enter company name" />
           <CompanyField label="License Number" value={form.licenseNumber} onChange={(v) => update("licenseNumber", v)} icon={<FileBadge2 />} placeholder="Enter license number" />
           <CompanyField label="Owner Name" value={form.ownerName} onChange={(v) => update("ownerName", v)} icon={<UserRound />} placeholder="Enter owner full name" />
