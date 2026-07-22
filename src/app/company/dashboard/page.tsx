@@ -5,9 +5,9 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bell, Building2, CalendarDays, Check, ChevronDown, Clock3, Download, Eye,
-  IndianRupee, LayoutDashboard, LogOut, MapPin, Menu, MoreVertical, Phone,
-  ReceiptIndianRupee, RefreshCw, Settings, Star, UserRound, Users, X,
+  Bell, Building2, CalendarDays, Camera, Check, ChevronDown, Clock3, Download, Eye,
+  IdCard, IndianRupee, LayoutDashboard, LogOut, Mail, MapPin, Menu, MoreVertical, Phone,
+  ReceiptIndianRupee, RefreshCw, Settings, ShieldCheck, Star, UserRound, Users, X,
 } from "lucide-react";
 import { companyBackendUrl, companyFirebaseAuth } from "@/lib/company-firebase";
 
@@ -31,6 +31,8 @@ export default function CompanyDashboardPage() {
   const [incoming, setIncoming] = useState<Row | null>(null);
   const [assigning, setAssigning] = useState<Row | null>(null);
   const [selectedStaff, setSelectedStaff] = useState("");
+  const [addingStaff, setAddingStaff] = useState(false);
+  const [staffSaving, setStaffSaving] = useState(false);
   const initializedIds = useRef(false);
   const knownIds = useRef(new Set<string>());
 
@@ -91,6 +93,27 @@ export default function CompanyDashboardPage() {
     if (!response.ok) { const payload = await response.json().catch(() => ({})); setError(payload.message || "Staff assignment failed."); return; }
     setAssigning(null); setIncoming(null); setSelectedStaff(""); await loadData(user);
   }
+  async function createStaff(form: { name: string; phone: string; email: string; role: string; photo: File; identity: File; idType: string }) {
+    if (!user) return;
+    setStaffSaving(true); setError("");
+    try {
+      const token = await user.getIdToken();
+      const authHeaders = { Authorization: `Bearer ${token}` };
+      const response = await fetch(`${companyBackendUrl}/api/partners/laundry/staff`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ name: form.name, phone: form.phone, email: form.email, role: form.role }) });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || "Unable to add staff member.");
+      const sequence = Number(payload.staff?.sequence || 0);
+      if (!sequence) throw new Error("Staff record was created without an identifier.");
+      const photoData = new FormData(); photoData.append("photo", form.photo);
+      const photoResponse = await fetch(`${companyBackendUrl}/api/partners/laundry/staff/${sequence}/photo`, { method: "POST", headers: authHeaders, body: photoData });
+      if (!photoResponse.ok) throw new Error((await photoResponse.json().catch(() => ({}))).message || "Staff photo upload failed.");
+      const identityData = new FormData(); identityData.append("document", form.identity); identityData.append("idType", form.idType);
+      const identityResponse = await fetch(`${companyBackendUrl}/api/partners/laundry/staff/${sequence}/identity`, { method: "POST", headers: authHeaders, body: identityData });
+      if (!identityResponse.ok) throw new Error((await identityResponse.json().catch(() => ({}))).message || "Government ID upload failed.");
+      setAddingStaff(false); await loadData(user);
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to add staff member."); }
+    finally { setStaffSaving(false); }
+  }
   function downloadReport() {
     const lines = [["Booking ID", "Customer", "Service", "Date", "Amount", "Status", "Assigned Staff"], ...bookings.map((booking) => {
       const assignment = (booking.laundryAssignment || {}) as Row;
@@ -117,12 +140,13 @@ export default function CompanyDashboardPage() {
             <div className="company-booking-table-wrap"><table className="company-booking-table"><thead><tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date & Time</th><th>Amount</th><th>Status</th><th>Assigned Staff</th><th>Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={8}><div className="company-table-loading">Loading live bookings...</div></td></tr> : bookings.length === 0 ? <tr><td colSpan={8}><TableEmpty /></td></tr> : bookings.slice(0, 10).map((booking) => <BookingRow key={idOf(booking)} booking={booking} onAssign={() => { setAssigning(booking); setSelectedStaff(""); }} />)}</tbody></table></div>
             {bookings.length > 0 ? <div className="company-view-all">View all bookings <span>→</span></div> : null}
           </div>
-          <div className="company-reference-panel company-activity-panel"><div className="company-reference-title"><h2>Staff &amp; Activity</h2><button className="company-add-staff">+ Add New Staff</button></div>{staff.length === 0 ? <div className="company-staff-empty"><Users /><b>No staff added</b><p>Add staff through the Partner App using verified phone or email.</p></div> : <div className="company-reference-staff">{staff.map((member, index) => <div className="company-reference-staff-row" key={value(member.sequence, String(index))}><i>{initials(member.name)}</i><span><b>{value(member.name, "Staff member")}</b><small>{value(member.role, "Laundry Staff")}</small><small>{value(member.email || member.phone, "Contact not added")}</small></span><em className={member.isOnline ? "available" : ""}>{member.isOnline ? "Available" : "Offline"}</em><strong>{bookings.filter((booking) => Number(((booking.laundryAssignment || {}) as Row).staffSequence) === Number(member.sequence)).length}</strong><MoreVertical /></div>)}</div>}</div>
+          <div className="company-reference-panel company-activity-panel"><div className="company-reference-title"><h2>Staff &amp; Activity</h2><button className="company-add-staff" onClick={() => setAddingStaff(true)}>+ Add New Staff</button></div>{staff.length === 0 ? <div className="company-staff-empty"><Users /><b>No staff added</b><p>Add staff using their verified phone number or Google email.</p></div> : <div className="company-reference-staff">{staff.map((member, index) => <div className="company-reference-staff-row" key={value(member.sequence, String(index))}><i className={member.photoUrl ? "has-photo" : ""} style={member.photoUrl ? { backgroundImage: `url(${String(member.photoUrl)})` } : undefined}>{member.photoUrl ? "" : initials(member.name)}</i><span><b>{value(member.name, "Staff member")}</b><small>{value(member.role, "Laundry Staff")}</small><small>{value(member.email || member.phone, "Contact not added")}</small></span><em className={member.isOnline ? "available" : ""}>{member.isOnline ? "Available" : "Offline"}</em><strong>{bookings.filter((booking) => Number(((booking.laundryAssignment || {}) as Row).staffSequence) === Number(member.sequence)).length}</strong><MoreVertical /></div>)}</div>}</div>
         </section>
       </div>
     </div>
     {incoming ? <IncomingModal booking={incoming} onClose={() => setIncoming(null)} onAssign={() => { setAssigning(incoming); setSelectedStaff(""); }} /> : null}
     {assigning ? <AssignModal booking={assigning} staff={staff} selected={selectedStaff} onSelected={setSelectedStaff} onClose={() => setAssigning(null)} onSubmit={assignStaff} /> : null}
+    {addingStaff ? <AddStaffModal saving={staffSaving} onClose={() => setAddingStaff(false)} onSubmit={createStaff} /> : null}
   </main>;
 }
 
@@ -132,3 +156,9 @@ function BookingRow({ booking, onAssign }: { booking: Row; onAssign: () => void 
 function TableEmpty() { return <div className="company-table-empty"><CalendarDays /><b>No bookings yet</b><p>Real customer bookings will appear here automatically. No default data is shown.</p></div>; }
 function IncomingModal({ booking, onClose, onAssign }: { booking: Row; onClose: () => void; onAssign: () => void }) { const snapshot = (booking.userSnapshot || {}) as Row; return <div className="company-modal-layer"><button className="company-modal-shade" onClick={onClose} aria-label="Close" /><div className="company-incoming-modal"><div className="company-modal-heading"><span><CalendarDays /></span><div><h2>New Booking Received</h2><em>Pending</em></div><button onClick={onClose}><X /></button></div><div className="company-modal-body"><p>Booking ID: <b>{value(booking.bookingCode || idOf(booking))}</b></p><div className="company-modal-customer"><i>{initials(booking.userName || snapshot.name)}</i><span><b>{value(booking.userName || snapshot.name, "Customer")}</b><small>{value(booking.userPhone || snapshot.phone, "Phone protected")}</small></span><button><Phone />Call Customer</button></div><h3>Booking Details</h3><dl><div><dt>Service</dt><dd>{value(booking.serviceName || booking.serviceCategory)}</dd></div><div><dt>Date &amp; Time</dt><dd>{readableDate(booking.slot || booking.createdAt)}</dd></div><div><dt>Address</dt><dd>{value(booking.address)}</dd></div></dl>{booking.issue ? <div className="company-customer-note"><b>Customer Note</b><p>{value(booking.issue)}</p></div> : null}<div className="company-modal-actions"><button onClick={onClose}><Eye />View Booking</button><button className="primary" onClick={onAssign}><UserRound />Assign Staff</button></div></div></div></div>; }
 function AssignModal({ booking, staff, selected, onSelected, onClose, onSubmit }: { booking: Row; staff: Row[]; selected: string; onSelected: (value: string) => void; onClose: () => void; onSubmit: () => void }) { return <div className="company-modal-layer top"><button className="company-modal-shade" onClick={onClose} aria-label="Close" /><div className="company-assign-modal"><button className="close" onClick={onClose}><X /></button><span><Users /></span><h2>Assign Staff</h2><p>{value(booking.bookingCode || idOf(booking))} ke liye verified staff choose karein.</p>{staff.length === 0 ? <div className="company-form-error">No staff available. Add staff from the Partner App first.</div> : <select value={selected} onChange={(event) => onSelected(event.target.value)}><option value="">Select staff member</option>{staff.map((member) => <option key={value(member.sequence)} value={value(member.sequence)}>{value(member.name)} — {member.isOnline ? "Available" : "Offline"}</option>)}</select>}<button className="submit" disabled={!selected} onClick={onSubmit}>Confirm Assignment</button></div></div>; }
+
+function AddStaffModal({ saving, onClose, onSubmit }: { saving: boolean; onClose: () => void; onSubmit: (form: { name: string; phone: string; email: string; role: string; photo: File; identity: File; idType: string }) => void }) {
+  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [role, setRole] = useState("Laundry Staff"); const [idType, setIdType] = useState("Government ID"); const [photo, setPhoto] = useState<File | null>(null); const [identity, setIdentity] = useState<File | null>(null); const [localError, setLocalError] = useState("");
+  function submit(event: React.FormEvent) { event.preventDefault(); if (name.trim().length < 2 || !/^[6-9]\d{9}$/.test(phone) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !photo || !identity) { setLocalError("Complete all fields with a valid 10-digit phone, email, photo and government ID."); return; } onSubmit({ name: name.trim(), phone, email: email.trim().toLowerCase(), role: role.trim() || "Laundry Staff", photo, identity, idType }); }
+  return <div className="company-modal-layer top"><button className="company-modal-shade" onClick={onClose} aria-label="Close"/><form className="company-staff-modal" onSubmit={submit}><button type="button" className="close" onClick={onClose}><X/></button><div className="company-staff-modal-head"><span><Users/></span><div><small>Team management</small><h2>Add New Staff</h2><p>Staff can login to the Partner App using this phone or Google email.</p></div></div><div className="company-staff-form-grid"><label><b>Staff Name *</b><span><UserRound/><input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Enter full name"/></span></label><label><b>Role *</b><span><Users/><input value={role} onChange={(e)=>setRole(e.target.value)} placeholder="Laundry Staff"/></span></label><label><b>Phone Number *</b><span><Phone/><input value={phone} onChange={(e)=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))} inputMode="numeric" placeholder="10-digit mobile number"/></span></label><label><b>Email Address *</b><span><Mail/><input value={email} onChange={(e)=>setEmail(e.target.value)} type="email" placeholder="staff@example.com"/></span></label></div><div className="company-staff-upload-grid"><label><input hidden type="file" accept="image/png,image/jpeg" onChange={(e)=>setPhoto(e.target.files?.[0]||null)}/><span><Camera/></span><div><b>Profile Photo *</b><small>{photo?.name || "JPG or PNG, max 5MB"}</small><em>{photo ? "Replace photo" : "Choose photo"}</em></div></label><label><input hidden type="file" accept="image/png,image/jpeg,application/pdf" onChange={(e)=>setIdentity(e.target.files?.[0]||null)}/><span><IdCard/></span><div><b>Government ID *</b><small>{identity?.name || "Aadhaar, PAN, Voter ID or other"}</small><em>{identity ? "Replace document" : "Upload document"}</em></div></label></div><label className="company-staff-id-type"><b>ID Type</b><select value={idType} onChange={(e)=>setIdType(e.target.value)}><option>Government ID</option><option>Aadhaar Card</option><option>PAN Card</option><option>Voter ID</option><option>Driving Licence</option></select></label>{localError ? <div className="company-form-error">{localError}</div>:null}<button className="company-staff-save" disabled={saving}>{saving ? "Creating staff account..." : "Add Staff Member"}</button><p className="company-staff-login-note"><ShieldCheck/>Login access will be securely linked to the entered phone number or email.</p></form></div>;
+}

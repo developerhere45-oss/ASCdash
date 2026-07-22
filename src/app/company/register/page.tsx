@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signInAnonymously } from "firebase/auth";
+import { FirebaseError } from "firebase/app";
 import { Building2, FileBadge2, Headphones, ImageIcon, LockKeyhole, Mail, MapPin, Phone, Send, ShieldCheck, TrendingUp, UserRound, X } from "lucide-react";
 import { CompanyBrand } from "@/components/company/company-brand";
 import { companyBackendUrl, companyFirebaseAuth } from "@/lib/company-firebase";
@@ -56,7 +57,19 @@ export default function CompanyRegisterPage() {
       const logoResponse = await fetch(`${companyBackendUrl}/api/partners/profile-photo`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: logoData });
       if (!logoResponse.ok) throw new Error("Company logo upload failed.");
       router.replace("/company/verification?registered=1");
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Registration failed."); }
+    } catch (caught) {
+      if (caught instanceof FirebaseError) {
+        const messages: Record<string, string> = {
+          "auth/network-request-failed": "Firebase authentication network request failed. Verify the Firebase Web API key and redeploy Render.",
+          "auth/operation-not-allowed": "Anonymous registration is not enabled in Firebase Authentication.",
+          "auth/unauthorized-domain": "This dashboard domain is not authorized in Firebase Authentication.",
+          "auth/internal-error": "Firebase could not create the secure registration session. Verify the Web App configuration.",
+        };
+        setError(`${messages[caught.code] || "Firebase registration failed."} (${caught.code})`);
+      } else {
+        setError(caught instanceof Error ? caught.message : "Registration failed.");
+      }
+    }
     finally { setLoading(false); }
   }
 
