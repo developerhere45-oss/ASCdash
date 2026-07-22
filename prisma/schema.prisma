@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  OPERATIONS_MANAGER
+  SUPPORT_EXECUTIVE
+}
+
+enum RecordStatus {
+  ACTIVE
+  BLOCKED
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  RESOLVED
+  UNPUBLISHED
+  PUBLISHED
+}
+
+enum BookingStatus {
+  DRAFT
+  PENDING
+  QUOTED
+  NEGOTIATING
+  CONFIRMED
+  ASSIGNED
+  ON_THE_WAY
+  ARRIVED
+  WORK_STARTED
+  WORK_COMPLETED
+  PAYMENT_PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  DISPUTED
+}
+
+model Admin {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         AdminRole  @default(SUPPORT_EXECUTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  auditLogs    AuditLog[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  firebaseUid    String?      @unique
+  name           String
+  phone          String       @unique
+  email          String?
+  address        String?
+  city           String       @default("Guwahati")
+  status         RecordStatus @default(ACTIVE)
+  totalBookings  Int          @default(0)
+  createdAt      DateTime     @default(now())
+  bookings       Booking[]
+  complaints     Complaint[]
+}
+
+model Technician {
+  id                String       @id @default(cuid())
+  firebaseUid       String?      @unique
+  name              String
+  mobile            String       @unique
+  email             String?
+  address           String
+  city              String       @default("Guwahati")
+  skills            String[]
+  experienceYears   Int          @default(0)
+  profilePhotoUrl   String?
+  aadhaarUrl        String?
+  panUrl            String?
+  selfieUrl         String?
+  verificationState RecordStatus @default(PENDING)
+  isOnline          Boolean      @default(false)
+  isVerified        Boolean      @default(false)
+  rating            Float        @default(4.8)
+  totalJobs         Int          @default(0)
+  completedJobs     Int          @default(0)
+  cancellationRate  Float        @default(0)
+  earnings          Decimal      @default(0)
+  createdAt         DateTime     @default(now())
+  bookings          Booking[]
+  quotes            Quote[]
+}
+
+model Service {
+  id          String       @id @default(cuid())
+  name        String
+  category    String
+  description String
+  basePrice   Decimal      @default(0)
+  icon         String?
+  isActive     Boolean      @default(true)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  bookings    Booking[]
+}
+
+model Booking {
+  id             String        @id @default(cuid())
+  bookingCode    String        @unique
+  userId         String
+  technicianId   String?
+  serviceId      String?
+  serviceType    String
+  address        String
+  city           String        @default("Guwahati")
+  date           DateTime
+  timeSlot       String
+  status         BookingStatus @default(PENDING)
+  quoteAmount    Decimal      @default(0)
+  paymentStatus  String       @default("pending")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  user           User         @relation(fields: [userId], references: [id])
+  technician     Technician?  @relation(fields: [technicianId], references: [id])
+  service        Service?     @relation(fields: [serviceId], references: [id])
+  quotes         Quote[]
+  complaints     Complaint[]
+}
+
+model Quote {
+  id                String     @id @default(cuid())
+  bookingId         String
+  technicianId      String
+  amount            Decimal
+  notes             String?
+  materialsRequired String?
+  isFlagged         Boolean    @default(false)
+  createdAt         DateTime   @default(now())
+  booking           Booking    @relation(fields: [bookingId], references: [id])
+  technician        Technician @relation(fields: [technicianId], references: [id])
+}
+
+model Complaint {
+  id          String       @id @default(cuid())
+  userId      String
+  bookingId   String?
+  type        String
+  message     String
+  status      RecordStatus @default(PENDING)
+  priority    String       @default("medium")
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+  user        User         @relation(fields: [userId], references: [id])
+  booking     Booking?     @relation(fields: [bookingId], references: [id])
+}
+
+model Notification {
+  id          String       @id @default(cuid())
+  title       String
+  body        String
+  channel     String
+  audience    String
+  status      RecordStatus @default(PENDING)
+  sentAt      DateTime?
+  createdAt   DateTime     @default(now())
+}
+
+model Banner {
+  id          String       @id @default(cuid())
+  title       String
+  imageUrl    String
+  placement   String
+  status      RecordStatus @default(UNPUBLISHED)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime     @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  adminId   String?
+  adminName String
+  action    String
+  entity    String
+  ipAddress String?
+  createdAt DateTime @default(now())
+  admin     Admin?   @relation(fields: [adminId], references: [id])
+}

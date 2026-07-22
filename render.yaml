@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: apnaservo-admin
+    env: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start -- -H 0.0.0.0
+    healthCheckPath: /dashboard
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_AUTH_DISABLED
+        value: "true"
+      - key: NEXT_PUBLIC_ENABLE_DEMO_DATA
+        value: "false"
+      - key: APNASERVO_BACKEND_URL
+        sync: false
+      - key: NEXT_PUBLIC_APNASERVO_BACKEND_URL
+        sync: false
+      - key: ADMIN_BACKEND_SECRET
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD_HASH
+        sync: false
+      - key: DATABASE_URL
+        sync: false
