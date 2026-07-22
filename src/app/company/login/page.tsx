@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, ShieldCheck } from "lucide-react";
+import { FirebaseError } from "firebase/app";
 import { signInWithPopup } from "firebase/auth";
 import { useState } from "react";
 import { CompanyBrand, GoogleMark } from "@/components/company/company-brand";
@@ -26,7 +27,18 @@ export default function CompanyLoginPage() {
       if (partner.businessType !== "laundry") throw new Error("This Google account is not registered as a company owner.");
       router.replace("/company/dashboard");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Google login failed. Please try again.");
+      if (caught instanceof FirebaseError) {
+        const messages: Record<string, string> = {
+          "auth/unauthorized-domain": "This Render domain is not authorized in Firebase Authentication.",
+          "auth/operation-not-allowed": "Google login is not enabled in Firebase Authentication.",
+          "auth/popup-blocked": "Google popup was blocked. Please allow popups and try again.",
+          "auth/popup-closed-by-user": "Google sign-in was cancelled.",
+          "auth/internal-error": "Google authentication could not start. Check Firebase Authorized Domains and try again.",
+        };
+        setError(messages[caught.code] || `Google sign-in failed (${caught.code}).`);
+      } else {
+        setError(caught instanceof Error ? caught.message : "Google login failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
