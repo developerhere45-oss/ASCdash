@@ -2,23 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithPopup, User } from "firebase/auth";
-import { Building2, FileBadge2, Headphones, ImageIcon, LockKeyhole, MapPin, Phone, Send, ShieldCheck, TrendingUp, UserRound, X } from "lucide-react";
-import { CompanyBrand, GoogleMark } from "@/components/company/company-brand";
-import { companyBackendUrl, companyFirebaseAuth, companyGoogleProvider } from "@/lib/company-firebase";
+import { signInAnonymously } from "firebase/auth";
+import { Building2, FileBadge2, Headphones, ImageIcon, LockKeyhole, Mail, MapPin, Phone, Send, ShieldCheck, TrendingUp, UserRound, X } from "lucide-react";
+import { CompanyBrand } from "@/components/company/company-brand";
+import { companyBackendUrl, companyFirebaseAuth } from "@/lib/company-firebase";
 
 type UploadKey = "license" | "ownerId" | "logo";
 
 export default function CompanyRegisterPage() {
   const router = useRouter();
-  const [googleUser, setGoogleUser] = useState<User | null>(null);
-  const [form, setForm] = useState({ companyName: "", licenseNumber: "", ownerName: "", ownerMobile: "", address: "", areaDraft: "" });
+  const [form, setForm] = useState({ companyName: "", licenseNumber: "", ownerName: "", ownerEmail: "", ownerMobile: "", address: "", areaDraft: "" });
   const [areas, setAreas] = useState<string[]>([]);
   const [files, setFiles] = useState<Partial<Record<UploadKey, File>>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const verifiedEmail = googleUser?.email || "";
-  const canSubmit = useMemo(() => form.companyName && form.licenseNumber && form.ownerName && /^\d{10}$/.test(form.ownerMobile) && form.address && areas.length > 0 && files.license && files.ownerId && files.logo, [form, areas, files]);
+  const canSubmit = useMemo(() => form.companyName && form.licenseNumber && form.ownerName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.ownerEmail) && /^\d{10}$/.test(form.ownerMobile) && form.address && areas.length > 0 && files.license && files.ownerId && files.logo, [form, areas, files]);
 
   function update(key: keyof typeof form, value: string) { setForm((current) => ({ ...current, [key]: value })); }
   function addArea() {
@@ -26,11 +24,6 @@ export default function CompanyRegisterPage() {
     if (!value || areas.some((area) => area.toLowerCase() === value.toLowerCase())) return;
     setAreas((current) => [...current, value]);
     update("areaDraft", "");
-  }
-  async function connectGoogle() {
-    setError("");
-    try { setGoogleUser((await signInWithPopup(companyFirebaseAuth(), companyGoogleProvider)).user); }
-    catch (caught) { setError(caught instanceof Error ? caught.message : "Google verification failed."); }
   }
   async function uploadDocument(token: string, file: File, documentType: string) {
     const data = new FormData();
@@ -44,13 +37,12 @@ export default function CompanyRegisterPage() {
     if (!canSubmit) { setError("Please complete every required field, coverage area and document."); return; }
     setLoading(true); setError("");
     try {
-      const user = googleUser || (await signInWithPopup(companyFirebaseAuth(), companyGoogleProvider)).user;
-      setGoogleUser(user);
+      const user = (await signInAnonymously(companyFirebaseAuth())).user;
       const token = await user.getIdToken(true);
       const response = await fetch(`${companyBackendUrl}/api/partners/profile`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          name: form.ownerName, phone: form.ownerMobile, email: user.email || "", businessType: "laundry",
+          name: form.ownerName, phone: form.ownerMobile, email: form.ownerEmail.trim().toLowerCase(), businessType: "laundry",
           serviceCategory: ["laundry", "cleaning"], city: areas[0], serviceArea: form.address, workingAreas: areas,
           residentialAddress: form.address, isOnline: false,
           laundryBusiness: { shopName: form.companyName, shopLicenseNumber: form.licenseNumber, shopLocation: form.address, ownerName: form.ownerName, ownerPhone: form.ownerMobile, staffMembers: [] }
@@ -80,11 +72,11 @@ export default function CompanyRegisterPage() {
           <span><TrendingUp /><b>More Business</b><small>Get more service requests</small></span>
           <span><Headphones /><b>24/7 Support</b><small>We&apos;re here to help you</small></span>
         </div>
-        <button type="button" className="company-google-verify" onClick={connectGoogle}><GoogleMark />{verifiedEmail ? `Verified: ${verifiedEmail}` : "Verify company owner with Google"}</button>
         <div className="company-form-grid">
           <CompanyField label="Company Name" value={form.companyName} onChange={(v) => update("companyName", v)} icon={<Building2 />} placeholder="Enter company name" />
           <CompanyField label="License Number" value={form.licenseNumber} onChange={(v) => update("licenseNumber", v)} icon={<FileBadge2 />} placeholder="Enter license number" />
           <CompanyField label="Owner Name" value={form.ownerName} onChange={(v) => update("ownerName", v)} icon={<UserRound />} placeholder="Enter owner full name" />
+          <CompanyField label="Owner Email" value={form.ownerEmail} onChange={(v) => update("ownerEmail", v)} icon={<Mail />} placeholder="Use the email you will login with" inputMode="email" />
           <CompanyField label="Owner Mobile Number" value={form.ownerMobile} onChange={(v) => update("ownerMobile", v.replace(/\D/g, "").slice(0, 10))} icon={<Phone />} placeholder="Enter mobile number" inputMode="numeric" />
           <CompanyField wide label="Company Address" value={form.address} onChange={(v) => update("address", v)} icon={<MapPin />} placeholder="Enter complete company address" />
           <div className="company-field company-field-wide"><label>Areas Your Company Can Cover <b>*</b></label><div className="company-area-input">{areas.map((area) => <span key={area}>{area}<button type="button" onClick={() => setAreas((current) => current.filter((item) => item !== area))}><X size={13} /></button></span>)}<input value={form.areaDraft} onChange={(e) => update("areaDraft", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addArea(); } }} onBlur={addArea} placeholder={areas.length ? "Add another area" : "Type an area and press Enter"} /></div></div>
@@ -103,10 +95,9 @@ export default function CompanyRegisterPage() {
   );
 }
 
-function CompanyField({ label, value, onChange, icon, placeholder, wide, inputMode }: { label: string; value: string; onChange: (value: string) => void; icon: React.ReactNode; placeholder: string; wide?: boolean; inputMode?: "numeric" }) {
+function CompanyField({ label, value, onChange, icon, placeholder, wide, inputMode }: { label: string; value: string; onChange: (value: string) => void; icon: React.ReactNode; placeholder: string; wide?: boolean; inputMode?: "numeric" | "email" }) {
   return <div className={`company-field ${wide ? "company-field-wide" : ""}`}><label>{label} <b>*</b></label><div>{icon}<input value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} inputMode={inputMode} /></div></div>;
 }
 function UploadBox({ title, note, icon, file, accept, onFile }: { title: string; note: string; icon: React.ReactNode; file?: File; accept: string; onFile: (file: File) => void }) {
   return <label className="company-upload-box"><span>{icon}</span><div><b>{title}</b><small>{file?.name || `Upload valid ${title.toLowerCase()}`}</small><em>{file ? "Replace Document" : "Upload Document"}</em><small>{note}</small></div><input type="file" hidden accept={accept} onChange={(event) => { const selected = event.target.files?.[0]; if (selected && selected.size <= 5 * 1024 * 1024) onFile(selected); }} /></label>;
 }
-

@@ -42,7 +42,7 @@ export default function CompanyLoginPage() {
           <div className="company-title-line" />
           <p>Login securely to manage bookings and your team</p>
           <button type="button" className="company-google-button" onClick={loginWithGoogle} disabled={loading}>
-            <GoogleMark />{loading ? "Connecting securely..." : "Login with Google"}
+            <GoogleMark />{loading ? "Connecting securely..." : "Sign in with Google"}
           </button>
           {error ? <div className="company-form-error">{error}</div> : null}
           <div className="company-login-help">
@@ -51,9 +51,7 @@ export default function CompanyLoginPage() {
           <div className="company-secure-note"><ShieldCheck size={18} /> Your information is secure and always protected.</div>
           <p className="company-login-register">Company not registered? <Link href="/company/register">Register for verification</Link></p>
         </div>
-        <div className="company-scene" aria-hidden="true"><Building2 size={170} /><span>ApnaServo</span></div>
       </section>
     </main>
   );
 }
-
