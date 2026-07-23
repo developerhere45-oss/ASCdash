@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, ShieldCheck } from "lucide-react";
 import { FirebaseError } from "firebase/app";
-import { getRedirectResult, signInWithRedirect, type User } from "firebase/auth";
+import { getRedirectResult, signInWithPopup, signInWithRedirect, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { CompanyBrand, GoogleMark } from "@/components/company/company-brand";
 import { companyBackendUrl, companyFirebaseAuth, companyGoogleProvider } from "@/lib/company-firebase";
@@ -36,7 +36,7 @@ export default function CompanyLoginPage() {
         "auth/operation-not-allowed": "Google login is not enabled in Firebase Authentication.",
         "auth/popup-blocked": "Google sign-in was blocked. Please try again.",
         "auth/popup-closed-by-user": "Google sign-in was cancelled.",
-        "auth/internal-error": "Firebase could not start Google sign-in. Verify the Web App config and Authorized Domain.",
+        "auth/internal-error": "Google sign-in could not start. Please reload once and try again.",
       };
       setError(messages[caught.code] || `Google sign-in failed (${caught.code}).`);
     } else {
@@ -57,9 +57,22 @@ export default function CompanyLoginPage() {
   async function loginWithGoogle() {
     setLoading(true); setError("");
     try {
-      await signInWithRedirect(companyFirebaseAuth(), companyGoogleProvider);
+      const result = await signInWithPopup(companyFirebaseAuth(), companyGoogleProvider);
+      await finishCompanyLogin(result.user);
     } catch (caught) {
-      showLoginError(caught); setLoading(false);
+      // Some mobile browsers block a popup. Redirect remains a supported
+      // fallback, while normal desktop login completes without a redirect.
+      if (caught instanceof FirebaseError && caught.code === "auth/popup-blocked") {
+        try {
+          await signInWithRedirect(companyFirebaseAuth(), companyGoogleProvider);
+          return;
+        } catch (redirectError) {
+          showLoginError(redirectError);
+        }
+      } else {
+        showLoginError(caught);
+      }
+      setLoading(false);
     }
   }
 
