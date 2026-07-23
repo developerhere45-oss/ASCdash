@@ -5,19 +5,68 @@ import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Bell, Building2, CalendarDays, Camera, Check, ChevronDown, Clock3, Download, Eye,
-  IdCard, IndianRupee, LayoutDashboard, LogOut, Mail, MapPin, Menu, MoreVertical, Phone,
-  ReceiptIndianRupee, RefreshCw, Settings, ShieldCheck, Star, UserRound, Users, X,
+  Bell,
+  Building2,
+  CalendarDays,
+  Camera,
+  Check,
+  ChevronDown,
+  Clock3,
+  Download,
+  Eye,
+  IdCard,
+  IndianRupee,
+  LayoutDashboard,
+  LogOut,
+  Mail,
+  MapPin,
+  Menu,
+  MoreVertical,
+  Phone,
+  ReceiptIndianRupee,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  Star,
+  UserRound,
+  Users,
+  X,
 } from "lucide-react";
 import { companyBackendUrl, companyFirebaseAuth } from "@/lib/company-firebase";
 
 type Row = Record<string, unknown>;
-const idOf = (row: Row) => String(row._id || row.bookingId || row.id || row.bookingCode || "");
-const value = (input: unknown, fallback = "—") => input === null || input === undefined || input === "" ? fallback : String(input);
-const statusLabel = (input: unknown) => value(input, "pending").replace(/_/g, " ");
-const rupees = (input: unknown) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(input || 0));
-function readableDate(input: unknown) { if (!input) return "Schedule pending"; const parsed = new Date(String(input)); return Number.isNaN(parsed.getTime()) ? String(input) : new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(parsed); }
-function initials(input: unknown) { return value(input, "AS").split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase(); }
+const idOf = (row: Row) =>
+  String(row._id || row.bookingId || row.id || row.bookingCode || "");
+const value = (input: unknown, fallback = "—") =>
+  input === null || input === undefined || input === ""
+    ? fallback
+    : String(input);
+const statusLabel = (input: unknown) =>
+  value(input, "pending").replace(/_/g, " ");
+const rupees = (input: unknown) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(Number(input || 0));
+function readableDate(input: unknown) {
+  if (!input) return "Schedule pending";
+  const parsed = new Date(String(input));
+  return Number.isNaN(parsed.getTime())
+    ? String(input)
+    : new Intl.DateTimeFormat("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(parsed);
+}
+function initials(input: unknown) {
+  return value(input, "AS")
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
 
 export default function CompanyDashboardPage() {
   const router = useRouter();
@@ -29,6 +78,7 @@ export default function CompanyDashboardPage() {
   const [error, setError] = useState("");
   const [mobileMenu, setMobileMenu] = useState(false);
   const [incoming, setIncoming] = useState<Row | null>(null);
+  const [viewingBookingId, setViewingBookingId] = useState("");
   const [assigning, setAssigning] = useState<Row | null>(null);
   const [selectedStaff, setSelectedStaff] = useState("");
   const [addingStaff, setAddingStaff] = useState(false);
@@ -39,140 +89,1554 @@ export default function CompanyDashboardPage() {
   const initializedIds = useRef(false);
   const knownIds = useRef(new Set<string>());
 
-  const loadData = useCallback(async (firebaseUser: User, silent = false) => {
-    if (!silent) setRefreshing(true);
-    try {
-      const token = await firebaseUser.getIdToken();
-      const headers = { Authorization: `Bearer ${token}` };
-      // Load the profile first. The backend normalizes legacy company accounts
-      // to one service category before any booking query is made.
-      const profileResponse = await fetch(`${companyBackendUrl}/api/partners/me`, { headers, cache: "no-store" });
-      const profilePayload = await profileResponse.json().catch(() => ({}));
-      if (!profileResponse.ok) throw new Error(profilePayload.message || "Company profile unavailable.");
-      const nextPartner = (profilePayload.partner || profilePayload) as Row;
-      const approved = nextPartner.businessVerificationStatus === "approved" && nextPartner.kycStatus === "verified" && nextPartner.isVerified === true && nextPartner.trustStatus === "trusted" && nextPartner.accountStatus !== "blocked" && nextPartner.accountStatus !== "suspended";
-      if (!approved) {
-        router.replace("/company/verification");
-        return;
+  const loadData = useCallback(
+    async (firebaseUser: User, silent = false) => {
+      if (!silent) setRefreshing(true);
+      try {
+        const token = await firebaseUser.getIdToken();
+        const headers = { Authorization: `Bearer ${token}` };
+        // Load the profile first. The backend normalizes legacy company accounts
+        // to one service category before any booking query is made.
+        const profileResponse = await fetch(
+          `${companyBackendUrl}/api/partners/me`,
+          { headers, cache: "no-store" },
+        );
+        const profilePayload = await profileResponse.json().catch(() => ({}));
+        if (!profileResponse.ok)
+          throw new Error(
+            profilePayload.message || "Company profile unavailable.",
+          );
+        const nextPartner = (profilePayload.partner || profilePayload) as Row;
+        const approved =
+          nextPartner.businessVerificationStatus === "approved" &&
+          nextPartner.kycStatus === "verified" &&
+          nextPartner.isVerified === true &&
+          nextPartner.trustStatus === "trusted" &&
+          nextPartner.accountStatus !== "blocked" &&
+          nextPartner.accountStatus !== "suspended";
+        if (!approved) {
+          router.replace("/company/verification");
+          return;
+        }
+        const bookingResponse = await fetch(
+          `${companyBackendUrl}/api/bookings/partner`,
+          { headers, cache: "no-store" },
+        );
+        const bookingPayload = await bookingResponse.json().catch(() => ({}));
+        const nextBookings: Row[] = bookingResponse.ok
+          ? Array.isArray(bookingPayload.bookings)
+            ? bookingPayload.bookings
+            : Array.isArray(bookingPayload)
+              ? bookingPayload
+              : []
+          : [];
+        setPartner(nextPartner);
+        setBookings(nextBookings);
+        if (initializedIds.current) {
+          const fresh = nextBookings.find(
+            (booking) => idOf(booking) && !knownIds.current.has(idOf(booking)),
+          );
+          if (fresh) setIncoming(fresh);
+        }
+        knownIds.current = new Set(nextBookings.map(idOf).filter(Boolean));
+        initializedIds.current = true;
+        setError("");
+      } catch (caught) {
+        setError(
+          caught instanceof Error ? caught.message : "Live data unavailable.",
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
-      const bookingResponse = await fetch(`${companyBackendUrl}/api/bookings/partner`, { headers, cache: "no-store" });
-      const bookingPayload = await bookingResponse.json().catch(() => ({}));
-      const nextBookings: Row[] = bookingResponse.ok ? (Array.isArray(bookingPayload.bookings) ? bookingPayload.bookings : Array.isArray(bookingPayload) ? bookingPayload : []) : [];
-      setPartner(nextPartner);
-      setBookings(nextBookings);
-      if (initializedIds.current) {
-        const fresh = nextBookings.find((booking) => idOf(booking) && !knownIds.current.has(idOf(booking)));
-        if (fresh) setIncoming(fresh);
-      }
-      knownIds.current = new Set(nextBookings.map(idOf).filter(Boolean));
-      initializedIds.current = true;
-      setError("");
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Live data unavailable."); }
-    finally { setLoading(false); setRefreshing(false); }
-  }, [router]);
+    },
+    [router],
+  );
 
-  useEffect(() => onAuthStateChanged(companyFirebaseAuth(), (current) => {
-    if (!current) { router.replace("/company/login"); return; }
-    setUser(current); void loadData(current);
-  }), [loadData, router]);
-  useEffect(() => { if (!user) return; const timer = window.setInterval(() => void loadData(user, true), 15_000); return () => window.clearInterval(timer); }, [loadData, user]);
+  useEffect(
+    () =>
+      onAuthStateChanged(companyFirebaseAuth(), (current) => {
+        if (!current) {
+          router.replace("/company/login");
+          return;
+        }
+        setUser(current);
+        void loadData(current);
+      }),
+    [loadData, router],
+  );
+  // Partner status updates are reloaded frequently so the company and user
+  // see the same booking progress without the owner changing anything.
+  useEffect(() => {
+    if (!user) return;
+    const timer = window.setInterval(() => void loadData(user, true), 5_000);
+    return () => window.clearInterval(timer);
+  }, [loadData, user]);
 
   const business = (partner?.laundryBusiness || {}) as Row;
-  const staff = Array.isArray(business.staffMembers) ? business.staffMembers as Row[] : [];
+  const staff = Array.isArray(business.staffMembers)
+    ? (business.staffMembers as Row[])
+    : [];
+  const viewingBooking =
+    bookings.find((booking) => idOf(booking) === viewingBookingId) || null;
   const companyName = value(business.shopName, "Your Company");
-  const metrics = useMemo(() => ({
-    total: bookings.length,
-    completed: bookings.filter((item) => String(item.status).toLowerCase() === "completed").length,
-    pending: bookings.filter((item) => ["pending", "sent_to_partner", "accepted"].includes(String(item.status).toLowerCase())).length,
-    cancelled: bookings.filter((item) => String(item.status).toLowerCase() === "cancelled").length,
-    earnings: bookings.filter((item) => String(item.status).toLowerCase() === "completed").reduce((sum, item) => sum + Number(item.finalAmount || item.price || 0), 0),
-  }), [bookings]);
+  const metrics = useMemo(
+    () => ({
+      total: bookings.length,
+      completed: bookings.filter(
+        (item) => String(item.status).toLowerCase() === "completed",
+      ).length,
+      pending: bookings.filter((item) =>
+        ["pending", "sent_to_partner", "accepted"].includes(
+          String(item.status).toLowerCase(),
+        ),
+      ).length,
+      cancelled: bookings.filter(
+        (item) => String(item.status).toLowerCase() === "cancelled",
+      ).length,
+      earnings: bookings
+        .filter((item) => String(item.status).toLowerCase() === "completed")
+        .reduce(
+          (sum, item) => sum + Number(item.finalAmount || item.price || 0),
+          0,
+        ),
+    }),
+    [bookings],
+  );
 
   async function assignStaff() {
     if (!user || !assigning || !selectedStaff) return;
-    const response = await fetch(`${companyBackendUrl}/api/partners/laundry/bookings/${encodeURIComponent(idOf(assigning))}/assign-staff`, {
-      method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${await user.getIdToken()}` }, body: JSON.stringify({ staffSequence: Number(selectedStaff) }),
-    });
-    if (!response.ok) { const payload = await response.json().catch(() => ({})); setError(payload.message || "Staff assignment failed."); return; }
-    setAssigning(null); setIncoming(null); setSelectedStaff(""); await loadData(user);
+    const response = await fetch(
+      `${companyBackendUrl}/api/partners/laundry/bookings/${encodeURIComponent(idOf(assigning))}/assign-staff`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ staffSequence: Number(selectedStaff) }),
+      },
+    );
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      setError(payload.message || "Staff assignment failed.");
+      return;
+    }
+    setAssigning(null);
+    setIncoming(null);
+    setSelectedStaff("");
+    await loadData(user);
   }
-  async function createStaff(form: { name: string; phone: string; email: string; role: string; photo: File; identity: File; idType: string }) {
+  async function createStaff(form: {
+    name: string;
+    phone: string;
+    email: string;
+    role: string;
+    photo: File;
+    identity: File;
+    idType: string;
+  }) {
     if (!user) return;
-    setStaffSaving(true); setError("");
+    setStaffSaving(true);
+    setError("");
     try {
       const token = await user.getIdToken();
       const authHeaders = { Authorization: `Bearer ${token}` };
-      const response = await fetch(`${companyBackendUrl}/api/partners/laundry/staff`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ name: form.name, phone: form.phone, email: form.email, role: form.role }) });
+      const response = await fetch(
+        `${companyBackendUrl}/api/partners/laundry/staff`,
+        {
+          method: "POST",
+          headers: { ...authHeaders, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.name,
+            phone: form.phone,
+            email: form.email,
+            role: form.role,
+          }),
+        },
+      );
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || "Unable to add staff member.");
+      if (!response.ok)
+        throw new Error(payload.message || "Unable to add staff member.");
       const sequence = Number(payload.staff?.sequence || 0);
-      if (!sequence) throw new Error("Staff record was created without an identifier.");
-      const photoData = new FormData(); photoData.append("photo", form.photo);
-      const photoResponse = await fetch(`${companyBackendUrl}/api/partners/laundry/staff/${sequence}/photo`, { method: "POST", headers: authHeaders, body: photoData });
-      if (!photoResponse.ok) throw new Error((await photoResponse.json().catch(() => ({}))).message || "Staff photo upload failed.");
-      const identityData = new FormData(); identityData.append("document", form.identity); identityData.append("idType", form.idType);
-      const identityResponse = await fetch(`${companyBackendUrl}/api/partners/laundry/staff/${sequence}/identity`, { method: "POST", headers: authHeaders, body: identityData });
-      if (!identityResponse.ok) throw new Error((await identityResponse.json().catch(() => ({}))).message || "Government ID upload failed.");
-      setAddingStaff(false); await loadData(user);
-    } catch (caught) { setError(caught instanceof Error ? caught.message : "Unable to add staff member."); }
-    finally { setStaffSaving(false); }
+      if (!sequence)
+        throw new Error("Staff record was created without an identifier.");
+      const photoData = new FormData();
+      photoData.append("photo", form.photo);
+      const photoResponse = await fetch(
+        `${companyBackendUrl}/api/partners/laundry/staff/${sequence}/photo`,
+        { method: "POST", headers: authHeaders, body: photoData },
+      );
+      if (!photoResponse.ok)
+        throw new Error(
+          (await photoResponse.json().catch(() => ({}))).message ||
+            "Staff photo upload failed.",
+        );
+      const identityData = new FormData();
+      identityData.append("document", form.identity);
+      identityData.append("idType", form.idType);
+      const identityResponse = await fetch(
+        `${companyBackendUrl}/api/partners/laundry/staff/${sequence}/identity`,
+        { method: "POST", headers: authHeaders, body: identityData },
+      );
+      if (!identityResponse.ok)
+        throw new Error(
+          (await identityResponse.json().catch(() => ({}))).message ||
+            "Government ID upload failed.",
+        );
+      setAddingStaff(false);
+      await loadData(user);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to add staff member.",
+      );
+    } finally {
+      setStaffSaving(false);
+    }
   }
   function downloadReport() {
-    const lines = [["Booking ID", "Customer", "Service", "Date", "Amount", "Status", "Assigned Staff"], ...bookings.map((booking) => {
-      const assignment = (booking.laundryAssignment || {}) as Row;
-      return [value(booking.bookingCode || idOf(booking)), value(booking.userName || (booking.userSnapshot as Row)?.name), value(booking.serviceName || booking.serviceCategory), readableDate(booking.createdAt), String(Number(booking.finalAmount || booking.price || 0)), statusLabel(booking.status), value(assignment.staffName, "")];
-    })];
-    const csv = lines.map((line) => line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const anchor = document.createElement("a"); anchor.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); anchor.download = "apnaservo-company-bookings.csv"; anchor.click(); URL.revokeObjectURL(anchor.href);
+    const lines = [
+      [
+        "Booking ID",
+        "Customer",
+        "Service",
+        "Date",
+        "Amount",
+        "Status",
+        "Assigned Staff",
+      ],
+      ...bookings.map((booking) => {
+        const assignment = (booking.laundryAssignment || {}) as Row;
+        return [
+          value(booking.bookingCode || idOf(booking)),
+          value(booking.userName || (booking.userSnapshot as Row)?.name),
+          value(booking.serviceName || booking.serviceCategory),
+          readableDate(booking.createdAt),
+          String(Number(booking.finalAmount || booking.price || 0)),
+          statusLabel(booking.status),
+          value(assignment.staffName, ""),
+        ];
+      }),
+    ];
+    const csv = lines
+      .map((line) =>
+        line.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","),
+      )
+      .join("\n");
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    anchor.download = "apnaservo-company-bookings.csv";
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
   }
 
-  return <main className="company-command-page">
-    <aside className={`company-command-sidebar ${mobileMenu ? "open" : ""}`}>
-      <div className="company-command-logo"><Image src="/apna-servo-wordmark.png" width={170} height={55} alt="ApnaServo" /><small>Home Services At Your Doorstep</small></div>
-      <nav><SidebarItem active={activeSection === "dashboard"} icon={<LayoutDashboard />} label="Dashboard" onClick={() => setActiveSection("dashboard")} /><SidebarItem active={activeSection === "bookings"} icon={<CalendarDays />} label="Bookings" onClick={() => setActiveSection("bookings")} /><SidebarItem active={activeSection === "staff"} icon={<Users />} label="Staff" onClick={() => setActiveSection("staff")} /><SidebarItem active={activeSection === "earnings"} icon={<IndianRupee />} label="Earnings" onClick={() => setActiveSection("earnings")} /><SidebarItem active={activeSection === "reviews"} icon={<Star />} label="Reviews" onClick={() => setActiveSection("reviews")} /><SidebarItem active={activeSection === "reports"} icon={<ReceiptIndianRupee />} label="Reports" onClick={() => setActiveSection("reports")} /><SidebarItem active={activeSection === "settings"} icon={<Settings />} label="Settings" onClick={() => setActiveSection("settings")} /></nav>
-      <button className="company-sidebar-logout" onClick={async () => { await signOut(companyFirebaseAuth()); router.replace("/company/login"); }}><LogOut />Sign Out</button>
-    </aside>
-    {mobileMenu ? <button className="company-menu-backdrop" aria-label="Close menu" onClick={() => setMobileMenu(false)} /> : null}
-    <div className="company-command-main">
-      <header className="company-command-header"><button className="company-mobile-menu" onClick={() => setMobileMenu(true)}><Menu /></button><div><h1>{activeSection === "dashboard" ? "Company Dashboard" : activeSection[0].toUpperCase() + activeSection.slice(1)}</h1><p>{activeSection === "dashboard" ? `Welcome back, ${companyName}` : `Manage ${activeSection} for ${companyName}`}</p></div><div className="company-header-tools"><div className="company-header-popover"><button className="company-notification-button" onClick={() => { setNotificationsOpen((v) => !v); setAccountOpen(false); }}><Bell /><span>{metrics.pending}</span></button>{notificationsOpen ? <NotificationPanel bookings={bookings} onClose={() => setNotificationsOpen(false)} onBookings={() => { setActiveSection("bookings"); setNotificationsOpen(false); }} /> : null}</div><button className="company-download" onClick={() => { downloadReport(); setActiveSection("reports"); }}><Download />Download Report</button><div className="company-header-popover"><button className="company-account-button" onClick={() => { setAccountOpen((v) => !v); setNotificationsOpen(false); }}>{companyName}<ChevronDown /><i>{initials(companyName)}</i></button>{accountOpen ? <div className="company-account-menu"><strong>{companyName}</strong><small>{value(partner?.email, "Company owner")}</small><button onClick={() => setActiveSection("settings")}><Settings/>Company settings</button><button onClick={async () => { await signOut(companyFirebaseAuth()); router.replace("/company/login"); }}><LogOut/>Sign out</button></div> : null}</div></div></header>
-      <div className="company-command-content">
-        {error ? <div className="company-live-error">{error}</div> : null}
-        {activeSection === "dashboard" ? <><section className="company-reference-metrics"><RefMetric icon={<CalendarDays />} label="Total Bookings" value={metrics.total} note="All time bookings" tone="pink" onClick={() => setActiveSection("bookings")} /><RefMetric icon={<Check />} label="Completed" value={metrics.completed} note="All completed" tone="green" onClick={() => setActiveSection("bookings")} /><RefMetric icon={<Clock3 />} label="Pending" value={metrics.pending} note="Awaiting action" tone="orange" onClick={() => setActiveSection("bookings")} /><RefMetric icon={<X />} label="Cancelled" value={metrics.cancelled} note="All cancelled" tone="red" onClick={() => setActiveSection("bookings")} /><RefMetric icon={<IndianRupee />} label="Total Earnings" value={rupees(metrics.earnings)} note="Completed bookings" tone="earning" onClick={() => setActiveSection("earnings")} /></section>
-        <section className="company-reference-grid">
-          <div className="company-reference-panel company-bookings-panel"><div className="company-reference-title"><span><CalendarDays /></span><h2>Upcoming Bookings</h2><button onClick={() => user && loadData(user)}><RefreshCw className={refreshing ? "animate-spin" : ""} />Refresh</button></div>
-            <div className="company-booking-table-wrap"><table className="company-booking-table"><thead><tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date & Time</th><th>Amount</th><th>Status</th><th>Assigned Staff</th><th>Action</th></tr></thead><tbody>{loading ? <tr><td colSpan={8}><div className="company-table-loading">Loading live bookings...</div></td></tr> : bookings.length === 0 ? <tr><td colSpan={8}><TableEmpty /></td></tr> : bookings.slice(0, 10).map((booking) => <BookingRow key={idOf(booking)} booking={booking} onAssign={() => { setAssigning(booking); setSelectedStaff(""); }} />)}</tbody></table></div>
-            {bookings.length > 0 ? <div className="company-view-all">View all bookings <span>→</span></div> : null}
+  return (
+    <main className="company-command-page">
+      <aside className={`company-command-sidebar ${mobileMenu ? "open" : ""}`}>
+        <div className="company-command-logo">
+          <Image
+            src="/apna-servo-wordmark.png"
+            width={170}
+            height={55}
+            alt="ApnaServo"
+          />
+          <small>Home Services At Your Doorstep</small>
+        </div>
+        <nav>
+          <SidebarItem
+            active={activeSection === "dashboard"}
+            icon={<LayoutDashboard />}
+            label="Dashboard"
+            onClick={() => setActiveSection("dashboard")}
+          />
+          <SidebarItem
+            active={activeSection === "bookings"}
+            icon={<CalendarDays />}
+            label="Bookings"
+            onClick={() => setActiveSection("bookings")}
+          />
+          <SidebarItem
+            active={activeSection === "staff"}
+            icon={<Users />}
+            label="Staff"
+            onClick={() => setActiveSection("staff")}
+          />
+          <SidebarItem
+            active={activeSection === "earnings"}
+            icon={<IndianRupee />}
+            label="Earnings"
+            onClick={() => setActiveSection("earnings")}
+          />
+          <SidebarItem
+            active={activeSection === "reviews"}
+            icon={<Star />}
+            label="Reviews"
+            onClick={() => setActiveSection("reviews")}
+          />
+          <SidebarItem
+            active={activeSection === "reports"}
+            icon={<ReceiptIndianRupee />}
+            label="Reports"
+            onClick={() => setActiveSection("reports")}
+          />
+          <SidebarItem
+            active={activeSection === "settings"}
+            icon={<Settings />}
+            label="Settings"
+            onClick={() => setActiveSection("settings")}
+          />
+        </nav>
+        <button
+          className="company-sidebar-logout"
+          onClick={async () => {
+            await signOut(companyFirebaseAuth());
+            router.replace("/company/login");
+          }}
+        >
+          <LogOut />
+          Sign Out
+        </button>
+      </aside>
+      {mobileMenu ? (
+        <button
+          className="company-menu-backdrop"
+          aria-label="Close menu"
+          onClick={() => setMobileMenu(false)}
+        />
+      ) : null}
+      <div className="company-command-main">
+        <header className="company-command-header">
+          <button
+            className="company-mobile-menu"
+            onClick={() => setMobileMenu(true)}
+          >
+            <Menu />
+          </button>
+          <div>
+            <h1>
+              {activeSection === "dashboard"
+                ? "Company Dashboard"
+                : activeSection[0].toUpperCase() + activeSection.slice(1)}
+            </h1>
+            <p>
+              {activeSection === "dashboard"
+                ? `Welcome back, ${companyName}`
+                : `Manage ${activeSection} for ${companyName}`}
+            </p>
           </div>
-          <div className="company-reference-panel company-activity-panel"><div className="company-reference-title"><h2>Staff &amp; Activity</h2><button className="company-add-staff" onClick={() => setAddingStaff(true)}>+ Add New Staff</button></div>{staff.length === 0 ? <div className="company-staff-empty"><Users /><b>No staff added</b><p>Add staff using their verified phone number or Google email.</p></div> : <div className="company-reference-staff">{staff.map((member, index) => <div className="company-reference-staff-row" key={value(member.sequence, String(index))}><i className={member.photoUrl ? "has-photo" : ""} style={member.photoUrl ? { backgroundImage: `url(${String(member.photoUrl)})` } : undefined}>{member.photoUrl ? "" : initials(member.name)}</i><span><b>{value(member.name, "Staff member")}</b><small>{value(member.role, "Service Staff")}</small><small>{value(member.email || member.phone, "Contact not added")}</small></span><em className={member.isOnline ? "available" : ""}>{member.isOnline ? "Available" : "Offline"}</em><strong>{bookings.filter((booking) => Number(((booking.laundryAssignment || {}) as Row).staffSequence) === Number(member.sequence)).length}</strong><MoreVertical /></div>)}</div>}</div>
-        </section></> : <WorkspaceSection section={activeSection} bookings={bookings} staff={staff} partner={partner} metrics={metrics} loading={loading} onAssign={(booking) => { setAssigning(booking); setSelectedStaff(""); }} onAddStaff={() => setAddingStaff(true)} onDownload={downloadReport} />}
+          <div className="company-header-tools">
+            <div className="company-header-popover">
+              <button
+                className="company-notification-button"
+                onClick={() => {
+                  setNotificationsOpen((v) => !v);
+                  setAccountOpen(false);
+                }}
+              >
+                <Bell />
+                <span>{metrics.pending}</span>
+              </button>
+              {notificationsOpen ? (
+                <NotificationPanel
+                  bookings={bookings}
+                  onClose={() => setNotificationsOpen(false)}
+                  onBookings={() => {
+                    setActiveSection("bookings");
+                    setNotificationsOpen(false);
+                  }}
+                />
+              ) : null}
+            </div>
+            <button
+              className="company-download"
+              onClick={() => {
+                downloadReport();
+                setActiveSection("reports");
+              }}
+            >
+              <Download />
+              Download Report
+            </button>
+            <div className="company-header-popover">
+              <button
+                className="company-account-button"
+                onClick={() => {
+                  setAccountOpen((v) => !v);
+                  setNotificationsOpen(false);
+                }}
+              >
+                {companyName}
+                <ChevronDown />
+                <i>{initials(companyName)}</i>
+              </button>
+              {accountOpen ? (
+                <div className="company-account-menu">
+                  <strong>{companyName}</strong>
+                  <small>{value(partner?.email, "Company owner")}</small>
+                  <button onClick={() => setActiveSection("settings")}>
+                    <Settings />
+                    Company settings
+                  </button>
+                  <button
+                    onClick={async () => {
+                      await signOut(companyFirebaseAuth());
+                      router.replace("/company/login");
+                    }}
+                  >
+                    <LogOut />
+                    Sign out
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </header>
+        <div className="company-command-content">
+          {error ? <div className="company-live-error">{error}</div> : null}
+          {activeSection === "dashboard" ? (
+            <>
+              <section className="company-reference-metrics">
+                <RefMetric
+                  icon={<CalendarDays />}
+                  label="Total Bookings"
+                  value={metrics.total}
+                  note="All time bookings"
+                  tone="pink"
+                  onClick={() => setActiveSection("bookings")}
+                />
+                <RefMetric
+                  icon={<Check />}
+                  label="Completed"
+                  value={metrics.completed}
+                  note="All completed"
+                  tone="green"
+                  onClick={() => setActiveSection("bookings")}
+                />
+                <RefMetric
+                  icon={<Clock3 />}
+                  label="Pending"
+                  value={metrics.pending}
+                  note="Awaiting action"
+                  tone="orange"
+                  onClick={() => setActiveSection("bookings")}
+                />
+                <RefMetric
+                  icon={<X />}
+                  label="Cancelled"
+                  value={metrics.cancelled}
+                  note="All cancelled"
+                  tone="red"
+                  onClick={() => setActiveSection("bookings")}
+                />
+                <RefMetric
+                  icon={<IndianRupee />}
+                  label="Total Earnings"
+                  value={rupees(metrics.earnings)}
+                  note="Completed bookings"
+                  tone="earning"
+                  onClick={() => setActiveSection("earnings")}
+                />
+              </section>
+              <section className="company-reference-grid">
+                <div className="company-reference-panel company-bookings-panel">
+                  <div className="company-reference-title">
+                    <span>
+                      <CalendarDays />
+                    </span>
+                    <h2>Upcoming Bookings</h2>
+                    <button onClick={() => user && loadData(user)}>
+                      <RefreshCw className={refreshing ? "animate-spin" : ""} />
+                      Refresh
+                    </button>
+                  </div>
+                  <div className="company-booking-table-wrap">
+                    <table className="company-booking-table">
+                      <thead>
+                        <tr>
+                          <th>Booking ID</th>
+                          <th>Customer</th>
+                          <th>Service</th>
+                          <th>Date & Time</th>
+                          <th>Amount</th>
+                          <th>Status</th>
+                          <th>Assigned Staff</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loading ? (
+                          <tr>
+                            <td colSpan={8}>
+                              <div className="company-table-loading">
+                                Loading live bookings...
+                              </div>
+                            </td>
+                          </tr>
+                        ) : bookings.length === 0 ? (
+                          <tr>
+                            <td colSpan={8}>
+                              <TableEmpty />
+                            </td>
+                          </tr>
+                        ) : (
+                          bookings.slice(0, 10).map((booking) => (
+                            <BookingRow
+                              key={idOf(booking)}
+                              booking={booking}
+                              onView={() => setViewingBookingId(idOf(booking))}
+                              onAssign={() => {
+                                setAssigning(booking);
+                                setSelectedStaff("");
+                              }}
+                            />
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {bookings.length > 0 ? (
+                    <div className="company-view-all">
+                      View all bookings <span>→</span>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="company-reference-panel company-activity-panel">
+                  <div className="company-reference-title">
+                    <h2>Staff &amp; Activity</h2>
+                    <button
+                      className="company-add-staff"
+                      onClick={() => setAddingStaff(true)}
+                    >
+                      + Add New Staff
+                    </button>
+                  </div>
+                  {staff.length === 0 ? (
+                    <div className="company-staff-empty">
+                      <Users />
+                      <b>No staff added</b>
+                      <p>
+                        Add staff using their verified phone number or Google
+                        email.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="company-reference-staff">
+                      {staff.map((member, index) => (
+                        <div
+                          className="company-reference-staff-row"
+                          key={value(member.sequence, String(index))}
+                        >
+                          <i
+                            className={member.photoUrl ? "has-photo" : ""}
+                            style={
+                              member.photoUrl
+                                ? {
+                                    backgroundImage: `url(${String(member.photoUrl)})`,
+                                  }
+                                : undefined
+                            }
+                          >
+                            {member.photoUrl ? "" : initials(member.name)}
+                          </i>
+                          <span>
+                            <b>{value(member.name, "Staff member")}</b>
+                            <small>{value(member.role, "Service Staff")}</small>
+                            <small>
+                              {value(
+                                member.email || member.phone,
+                                "Contact not added",
+                              )}
+                            </small>
+                          </span>
+                          <em className={member.isOnline ? "available" : ""}>
+                            {member.isOnline ? "Available" : "Offline"}
+                          </em>
+                          <strong>
+                            {
+                              bookings.filter(
+                                (booking) =>
+                                  Number(
+                                    ((booking.laundryAssignment || {}) as Row)
+                                      .staffSequence,
+                                  ) === Number(member.sequence),
+                              ).length
+                            }
+                          </strong>
+                          <MoreVertical />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
+            </>
+          ) : (
+            <WorkspaceSection
+              section={activeSection}
+              bookings={bookings}
+              staff={staff}
+              partner={partner}
+              metrics={metrics}
+              loading={loading}
+              onView={(booking) => setViewingBookingId(idOf(booking))}
+              onAssign={(booking) => {
+                setAssigning(booking);
+                setSelectedStaff("");
+              }}
+              onAddStaff={() => setAddingStaff(true)}
+              onDownload={downloadReport}
+            />
+          )}
+        </div>
+      </div>
+      {incoming ? (
+        <IncomingModal
+          booking={incoming}
+          onClose={() => setIncoming(null)}
+          onView={() => {
+            setViewingBookingId(idOf(incoming));
+            setIncoming(null);
+          }}
+          onAssign={() => {
+            setAssigning(incoming);
+            setSelectedStaff("");
+          }}
+        />
+      ) : null}
+      {viewingBooking ? (
+        <BookingDetailsModal
+          booking={viewingBooking}
+          onClose={() => setViewingBookingId("")}
+          onAssign={() => {
+            setAssigning(viewingBooking);
+            setSelectedStaff("");
+            setViewingBookingId("");
+          }}
+        />
+      ) : null}
+      {assigning ? (
+        <AssignModal
+          booking={assigning}
+          staff={staff}
+          selected={selectedStaff}
+          onSelected={setSelectedStaff}
+          onClose={() => setAssigning(null)}
+          onSubmit={assignStaff}
+        />
+      ) : null}
+      {addingStaff ? (
+        <AddStaffModal
+          saving={staffSaving}
+          onClose={() => setAddingStaff(false)}
+          onSubmit={createStaff}
+        />
+      ) : null}
+    </main>
+  );
+}
+
+function SidebarItem({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button className={active ? "active" : ""} onClick={onClick}>
+      {icon}
+      {label}
+    </button>
+  );
+}
+function RefMetric({
+  icon,
+  label,
+  value: metricValue,
+  note,
+  tone,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  note: string;
+  tone: string;
+  onClick?: () => void;
+}) {
+  return (
+    <button className={`company-ref-metric ${tone}`} onClick={onClick}>
+      <span>{icon}</span>
+      <div>
+        <small>{label}</small>
+        <b>{metricValue}</b>
+        <em>{note}</em>
+      </div>
+      <i />
+    </button>
+  );
+}
+function NotificationPanel({
+  bookings,
+  onClose,
+  onBookings,
+}: {
+  bookings: Row[];
+  onClose: () => void;
+  onBookings: () => void;
+}) {
+  const items = bookings
+    .filter((b) =>
+      ["pending", "sent_to_partner", "accepted"].includes(
+        String(b.status).toLowerCase(),
+      ),
+    )
+    .slice(0, 5);
+  return (
+    <div className="company-notification-panel">
+      <div>
+        <b>Notifications</b>
+        <button onClick={onClose}>
+          <X />
+        </button>
+      </div>
+      {items.length ? (
+        items.map((item) => (
+          <button key={idOf(item)} onClick={onBookings}>
+            <span>
+              <CalendarDays />
+            </span>
+            <p>
+              <b>{value(item.bookingCode || idOf(item))}</b>
+              <small>
+                {statusLabel(item.status)} · {readableDate(item.createdAt)}
+              </small>
+            </p>
+          </button>
+        ))
+      ) : (
+        <section>
+          <Bell />
+          <b>You&apos;re all caught up</b>
+          <small>No pending booking notifications.</small>
+        </section>
+      )}
+      <button className="view" onClick={onBookings}>
+        View all bookings
+      </button>
+    </div>
+  );
+}
+function WorkspaceSection({
+  section,
+  bookings,
+  staff,
+  partner,
+  metrics,
+  loading,
+  onView,
+  onAssign,
+  onAddStaff,
+  onDownload,
+}: {
+  section: string;
+  bookings: Row[];
+  staff: Row[];
+  partner: Row | null;
+  metrics: {
+    total: number;
+    completed: number;
+    pending: number;
+    cancelled: number;
+    earnings: number;
+  };
+  loading: boolean;
+  onView: (b: Row) => void;
+  onAssign: (b: Row) => void;
+  onAddStaff: () => void;
+  onDownload: () => void;
+}) {
+  if (section === "bookings")
+    return (
+      <div className="company-workspace-card">
+        <SectionHead
+          icon={<CalendarDays />}
+          title="All Bookings"
+          text="Click any booking to see live customer, amount and status details."
+        />
+        <div className="company-booking-table-wrap">
+          <table className="company-booking-table">
+            <thead>
+              <tr>
+                <th>Booking ID</th>
+                <th>Customer</th>
+                <th>Service</th>
+                <th>Date & Time</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Assigned Staff</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8}>Loading...</td>
+                </tr>
+              ) : bookings.length ? (
+                bookings.map((b) => (
+                  <BookingRow
+                    key={idOf(b)}
+                    booking={b}
+                    onView={() => onView(b)}
+                    onAssign={() => onAssign(b)}
+                  />
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={8}>
+                    <TableEmpty />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  if (section === "staff")
+    return (
+      <div className="company-workspace-card">
+        <SectionHead
+          icon={<Users />}
+          title="Staff Management"
+          text="Manage team access and assigned work."
+          action="Add New Staff"
+          onAction={onAddStaff}
+        />
+        <div className="company-workspace-staff">
+          {staff.length ? (
+            staff.map((m, i) => (
+              <article key={value(m.sequence, String(i))}>
+                <i
+                  className={m.photoUrl ? "has-photo" : ""}
+                  style={
+                    m.photoUrl
+                      ? { backgroundImage: `url(${String(m.photoUrl)})` }
+                      : undefined
+                  }
+                >
+                  {m.photoUrl ? "" : initials(m.name)}
+                </i>
+                <div>
+                  <b>{value(m.name)}</b>
+                  <small>{value(m.role, "Service Staff")}</small>
+                  <span>
+                    {value(m.email)} · {value(m.phone)}
+                  </span>
+                </div>
+                <em className={m.isOnline ? "online" : ""}>
+                  {m.isOnline ? "Online" : "Offline"}
+                </em>
+                <strong>
+                  {
+                    bookings.filter(
+                      (b) =>
+                        Number(
+                          ((b.laundryAssignment || {}) as Row).staffSequence,
+                        ) === Number(m.sequence),
+                    ).length
+                  }{" "}
+                  jobs
+                </strong>
+              </article>
+            ))
+          ) : (
+            <TableEmpty />
+          )}
+        </div>
+      </div>
+    );
+  if (section === "earnings")
+    return (
+      <>
+        <div className="company-workspace-stats">
+          <Stat
+            label="Total Earnings"
+            value={rupees(metrics.earnings)}
+            tone="pink"
+          />
+          <Stat label="Completed Orders" value={metrics.completed} />
+          <Stat
+            label="Average Order"
+            value={rupees(
+              metrics.completed ? metrics.earnings / metrics.completed : 0,
+            )}
+          />
+        </div>
+        <div className="company-workspace-card">
+          <SectionHead
+            icon={<IndianRupee />}
+            title="Earnings History"
+            text="Revenue from completed bookings only."
+          />
+          <div className="company-earning-list">
+            {bookings
+              .filter((b) => String(b.status).toLowerCase() === "completed")
+              .map((b) => (
+                <article key={idOf(b)}>
+                  <span>
+                    <b>{value(b.bookingCode || idOf(b))}</b>
+                    <small>{readableDate(b.updatedAt || b.createdAt)}</small>
+                  </span>
+                  <strong>{rupees(b.finalAmount || b.price)}</strong>
+                </article>
+              ))}
+          </div>
+        </div>
+      </>
+    );
+  if (section === "reviews")
+    return (
+      <div className="company-workspace-card">
+        <SectionHead
+          icon={<Star />}
+          title="Customer Reviews"
+          text="Ratings attached to completed service bookings."
+        />
+        <div className="company-review-summary">
+          <Star />
+          <b>{value(partner?.rating, "No rating yet")}</b>
+          <p>Customer reviews will appear here after completed bookings.</p>
+        </div>
+      </div>
+    );
+  if (section === "reports")
+    return (
+      <div className="company-workspace-card">
+        <SectionHead
+          icon={<ReceiptIndianRupee />}
+          title="Business Reports"
+          text="Download clean operational records."
+        />
+        <div className="company-report-grid">
+          <button onClick={onDownload}>
+            <Download />
+            <b>Bookings Report</b>
+            <small>Booking, customer, staff, amount and status CSV</small>
+          </button>
+          <button onClick={onDownload}>
+            <IndianRupee />
+            <b>Earnings Report</b>
+            <small>Completed order revenue records</small>
+          </button>
+          <button onClick={onDownload}>
+            <Users />
+            <b>Staff Activity Report</b>
+            <small>Assignments and team workload</small>
+          </button>
+        </div>
+      </div>
+    );
+  return (
+    <div className="company-workspace-card">
+      <SectionHead
+        icon={<Settings />}
+        title="Company Settings"
+        text="Verified business profile and account information."
+      />
+      <div className="company-settings-profile">
+        <span>
+          <Building2 />
+        </span>
+        <div>
+          <small>Company</small>
+          <b>{value(((partner?.laundryBusiness || {}) as Row).shopName)}</b>
+          <p>
+            {value(partner?.email)} · {value(partner?.phone)}
+          </p>
+          <p>
+            {value(
+              ((partner?.laundryBusiness || {}) as Row).shopLocation ||
+                partner?.serviceArea,
+            )}
+          </p>
+        </div>
+        <em>Verified</em>
       </div>
     </div>
-    {incoming ? <IncomingModal booking={incoming} onClose={() => setIncoming(null)} onAssign={() => { setAssigning(incoming); setSelectedStaff(""); }} /> : null}
-    {assigning ? <AssignModal booking={assigning} staff={staff} selected={selectedStaff} onSelected={setSelectedStaff} onClose={() => setAssigning(null)} onSubmit={assignStaff} /> : null}
-    {addingStaff ? <AddStaffModal saving={staffSaving} onClose={() => setAddingStaff(false)} onSubmit={createStaff} /> : null}
-  </main>;
+  );
+}
+function SectionHead({
+  icon,
+  title,
+  text,
+  action,
+  onAction,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="company-workspace-head">
+      <span>{icon}</span>
+      <div>
+        <h2>{title}</h2>
+        <p>{text}</p>
+      </div>
+      {action ? <button onClick={onAction}>+ {action}</button> : null}
+    </div>
+  );
+}
+function Stat({
+  label,
+  value: statValue,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone?: string;
+}) {
+  return (
+    <article className={tone || ""}>
+      <small>{label}</small>
+      <b>{statValue}</b>
+    </article>
+  );
+}
+function BookingRow({
+  booking,
+  onView,
+  onAssign,
+}: {
+  booking: Row;
+  onView: () => void;
+  onAssign: () => void;
+}) {
+  const snapshot = (booking.userSnapshot || {}) as Row;
+  const assignment = (booking.laundryAssignment || {}) as Row;
+  return (
+    <tr className="company-booking-row" onClick={onView}>
+      <td>
+        <b className="booking-code">
+          {value(booking.bookingCode || idOf(booking))}
+        </b>
+      </td>
+      <td>
+        <div className="company-customer-cell">
+          <i>{initials(booking.userName || snapshot.name)}</i>
+          <span>
+            <b>{value(booking.userName || snapshot.name, "Customer")}</b>
+            <small>{value(booking.userPhone || snapshot.phone, "")}</small>
+          </span>
+        </div>
+      </td>
+      <td>{value(booking.serviceName || booking.serviceCategory)}</td>
+      <td>{readableDate(booking.slot || booking.createdAt)}</td>
+      <td>
+        <b>{rupees(booking.finalAmount || booking.price)}</b>
+      </td>
+      <td>
+        <span
+          className={`company-table-status status-${String(booking.status || "pending").toLowerCase()}`}
+        >
+          {statusLabel(booking.status)}
+        </span>
+      </td>
+      <td>
+        {assignment.staffName ? (
+          <span>
+            <b>{value(assignment.staffName)}</b>
+            <small className="block text-[10px] text-slate-400">
+              Currently Assigned
+            </small>
+          </span>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td>
+        <button
+          className={assignment.staffName ? "outline" : ""}
+          onClick={(event) => {
+            event.stopPropagation();
+            onAssign();
+          }}
+        >
+          {assignment.staffName ? "Reassign" : "Assign Staff"}
+        </button>
+      </td>
+    </tr>
+  );
+}
+function TableEmpty() {
+  return (
+    <div className="company-table-empty">
+      <CalendarDays />
+      <b>No bookings yet</b>
+      <p>
+        Real customer bookings will appear here automatically. No default data
+        is shown.
+      </p>
+    </div>
+  );
+}
+function IncomingModal({
+  booking,
+  onClose,
+  onView,
+  onAssign,
+}: {
+  booking: Row;
+  onClose: () => void;
+  onView: () => void;
+  onAssign: () => void;
+}) {
+  const snapshot = (booking.userSnapshot || {}) as Row;
+  return (
+    <div className="company-modal-layer">
+      <button
+        className="company-modal-shade"
+        onClick={onClose}
+        aria-label="Close"
+      />
+      <div className="company-incoming-modal">
+        <div className="company-modal-heading">
+          <span>
+            <CalendarDays />
+          </span>
+          <div>
+            <h2>New Booking Received</h2>
+            <em>Pending</em>
+          </div>
+          <button onClick={onClose}>
+            <X />
+          </button>
+        </div>
+        <div className="company-modal-body">
+          <p>
+            Booking ID: <b>{value(booking.bookingCode || idOf(booking))}</b>
+          </p>
+          <div className="company-modal-customer">
+            <i>{initials(booking.userName || snapshot.name)}</i>
+            <span>
+              <b>{value(booking.userName || snapshot.name, "Customer")}</b>
+              <small>
+                {value(booking.userPhone || snapshot.phone, "Phone protected")}
+              </small>
+            </span>
+            <button>
+              <Phone />
+              Call Customer
+            </button>
+          </div>
+          <h3>Booking Details</h3>
+          <dl>
+            <div>
+              <dt>Service</dt>
+              <dd>{value(booking.serviceName || booking.serviceCategory)}</dd>
+            </div>
+            <div>
+              <dt>Date &amp; Time</dt>
+              <dd>{readableDate(booking.slot || booking.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Address</dt>
+              <dd>{value(booking.address)}</dd>
+            </div>
+          </dl>
+          {booking.issue ? (
+            <div className="company-customer-note">
+              <b>Customer Note</b>
+              <p>{value(booking.issue)}</p>
+            </div>
+          ) : null}
+          <div className="company-modal-actions">
+            <button onClick={onView}>
+              <Eye />
+              View Booking
+            </button>
+            <button className="primary" onClick={onAssign}>
+              <UserRound />
+              Assign Staff
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function BookingDetailsModal({
+  booking,
+  onClose,
+  onAssign,
+}: {
+  booking: Row;
+  onClose: () => void;
+  onAssign: () => void;
+}) {
+  const snapshot = (booking.userSnapshot || {}) as Row;
+  const assignment = (booking.laundryAssignment || {}) as Row;
+  const timeline = Array.isArray(booking.statusTimeline)
+    ? (booking.statusTimeline as Row[])
+    : [];
+  const liveTimeline = timeline.length
+    ? timeline
+    : [{ status: booking.status, at: booking.updatedAt || booking.createdAt }];
+  return (
+    <div className="company-modal-layer top">
+      <button
+        className="company-modal-shade"
+        onClick={onClose}
+        aria-label="Close booking details"
+      />
+      <div className="company-incoming-modal company-booking-detail-modal">
+        <div className="company-modal-heading">
+          <span>
+            <CalendarDays />
+          </span>
+          <div>
+            <h2>Booking Details</h2>
+            <em>Live update</em>
+          </div>
+          <button onClick={onClose} aria-label="Close booking details">
+            <X />
+          </button>
+        </div>
+        <div className="company-modal-body">
+          <p>
+            Booking ID: <b>{value(booking.bookingCode || idOf(booking))}</b>
+          </p>
+          <div className="company-modal-customer">
+            <i>{initials(booking.userName || snapshot.name)}</i>
+            <span>
+              <b>{value(booking.userName || snapshot.name, "Customer")}</b>
+              <small>
+                {value(booking.userPhone || snapshot.phone, "Phone protected")}
+              </small>
+            </span>
+          </div>
+          <h3>Service Details</h3>
+          <dl>
+            <div>
+              <dt>Service</dt>
+              <dd>{value(booking.serviceName || booking.serviceCategory)}</dd>
+            </div>
+            <div>
+              <dt>Date &amp; Time</dt>
+              <dd>{readableDate(booking.slot || booking.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>Address</dt>
+              <dd>{value(booking.address)}</dd>
+            </div>
+            <div>
+              <dt>Amount</dt>
+              <dd>{rupees(booking.finalAmount || booking.price)}</dd>
+            </div>
+            <div>
+              <dt>Assigned Staff</dt>
+              <dd>{value(assignment.staffName, "Not assigned yet")}</dd>
+            </div>
+          </dl>
+          {booking.issue ? (
+            <div className="company-customer-note">
+              <b>Customer Note</b>
+              <p>{value(booking.issue)}</p>
+            </div>
+          ) : null}
+          <section className="company-booking-live-status">
+            <div>
+              <h3>Live Service Status</h3>
+              <small>
+                Refreshes automatically when the partner updates it.
+              </small>
+            </div>
+            <span
+              className={`company-table-status status-${String(booking.status || "pending").toLowerCase()}`}
+            >
+              {statusLabel(booking.status)}
+            </span>
+          </section>
+          <ol className="company-booking-timeline">
+            {liveTimeline.map((entry, index) => (
+              <li key={`${value(entry.at, String(index))}-${index}`}>
+                <i
+                  className={index === liveTimeline.length - 1 ? "active" : ""}
+                />
+                <div>
+                  <b>{statusLabel(entry.status)}</b>
+                  <small>{readableDate(entry.at)}</small>
+                  {entry.note ? <p>{value(entry.note)}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="company-modal-actions">
+            <button onClick={onClose}>Close</button>
+            <button className="primary" onClick={onAssign}>
+              <UserRound />
+              {assignment.staffName ? "Reassign Staff" : "Assign Staff"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+function AssignModal({
+  booking,
+  staff,
+  selected,
+  onSelected,
+  onClose,
+  onSubmit,
+}: {
+  booking: Row;
+  staff: Row[];
+  selected: string;
+  onSelected: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="company-modal-layer top">
+      <button
+        className="company-modal-shade"
+        onClick={onClose}
+        aria-label="Close"
+      />
+      <div className="company-assign-modal">
+        <button className="close" onClick={onClose}>
+          <X />
+        </button>
+        <span>
+          <Users />
+        </span>
+        <h2>Assign Staff</h2>
+        <p>
+          {value(booking.bookingCode || idOf(booking))} ke liye verified staff
+          choose karein.
+        </p>
+        {staff.length === 0 ? (
+          <div className="company-form-error">
+            No staff available. Add staff from the Partner App first.
+          </div>
+        ) : (
+          <select
+            value={selected}
+            onChange={(event) => onSelected(event.target.value)}
+          >
+            <option value="">Select staff member</option>
+            {staff.map((member) => (
+              <option
+                key={value(member.sequence)}
+                value={value(member.sequence)}
+              >
+                {value(member.name)} —{" "}
+                {member.isOnline ? "Available" : "Offline"}
+              </option>
+            ))}
+          </select>
+        )}
+        <button className="submit" disabled={!selected} onClick={onSubmit}>
+          Confirm Assignment
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function SidebarItem({ icon, label, active, onClick }: { icon: React.ReactNode; label: string; active?: boolean; onClick: () => void }) { return <button className={active ? "active" : ""} onClick={onClick}>{icon}{label}</button>; }
-function RefMetric({ icon, label, value: metricValue, note, tone, onClick }: { icon: React.ReactNode; label: string; value: string | number; note: string; tone: string; onClick?: () => void }) { return <button className={`company-ref-metric ${tone}`} onClick={onClick}><span>{icon}</span><div><small>{label}</small><b>{metricValue}</b><em>{note}</em></div><i /></button>; }
-function NotificationPanel({ bookings, onClose, onBookings }: { bookings: Row[]; onClose: () => void; onBookings: () => void }) { const items = bookings.filter((b) => ["pending", "sent_to_partner", "accepted"].includes(String(b.status).toLowerCase())).slice(0,5); return <div className="company-notification-panel"><div><b>Notifications</b><button onClick={onClose}><X/></button></div>{items.length ? items.map((item)=><button key={idOf(item)} onClick={onBookings}><span><CalendarDays/></span><p><b>{value(item.bookingCode || idOf(item))}</b><small>{statusLabel(item.status)} · {readableDate(item.createdAt)}</small></p></button>) : <section><Bell/><b>You&apos;re all caught up</b><small>No pending booking notifications.</small></section>}<button className="view" onClick={onBookings}>View all bookings</button></div>; }
-function WorkspaceSection({ section, bookings, staff, partner, metrics, loading, onAssign, onAddStaff, onDownload }: { section: string; bookings: Row[]; staff: Row[]; partner: Row | null; metrics: { total:number; completed:number; pending:number; cancelled:number; earnings:number }; loading:boolean; onAssign:(b:Row)=>void; onAddStaff:()=>void; onDownload:()=>void }) {
-  if(section === "bookings") return <div className="company-workspace-card"><SectionHead icon={<CalendarDays/>} title="All Bookings" text="Track and assign every live customer booking."/><div className="company-booking-table-wrap"><table className="company-booking-table"><thead><tr><th>Booking ID</th><th>Customer</th><th>Service</th><th>Date & Time</th><th>Amount</th><th>Status</th><th>Assigned Staff</th><th>Action</th></tr></thead><tbody>{loading?<tr><td colSpan={8}>Loading...</td></tr>:bookings.length?bookings.map(b=><BookingRow key={idOf(b)} booking={b} onAssign={()=>onAssign(b)}/>):<tr><td colSpan={8}><TableEmpty/></td></tr>}</tbody></table></div></div>;
-  if(section === "staff") return <div className="company-workspace-card"><SectionHead icon={<Users/>} title="Staff Management" text="Manage team access and assigned work." action="Add New Staff" onAction={onAddStaff}/><div className="company-workspace-staff">{staff.length?staff.map((m,i)=><article key={value(m.sequence,String(i))}><i className={m.photoUrl?"has-photo":""} style={m.photoUrl?{backgroundImage:`url(${String(m.photoUrl)})`}:undefined}>{m.photoUrl?"":initials(m.name)}</i><div><b>{value(m.name)}</b><small>{value(m.role,"Service Staff")}</small><span>{value(m.email)} · {value(m.phone)}</span></div><em className={m.isOnline?"online":""}>{m.isOnline?"Online":"Offline"}</em><strong>{bookings.filter(b=>Number(((b.laundryAssignment||{}) as Row).staffSequence)===Number(m.sequence)).length} jobs</strong></article>):<TableEmpty/>}</div></div>;
-  if(section === "earnings") return <><div className="company-workspace-stats"><Stat label="Total Earnings" value={rupees(metrics.earnings)} tone="pink"/><Stat label="Completed Orders" value={metrics.completed}/><Stat label="Average Order" value={rupees(metrics.completed?metrics.earnings/metrics.completed:0)}/></div><div className="company-workspace-card"><SectionHead icon={<IndianRupee/>} title="Earnings History" text="Revenue from completed bookings only."/><div className="company-earning-list">{bookings.filter(b=>String(b.status).toLowerCase()==="completed").map(b=><article key={idOf(b)}><span><b>{value(b.bookingCode||idOf(b))}</b><small>{readableDate(b.updatedAt||b.createdAt)}</small></span><strong>{rupees(b.finalAmount||b.price)}</strong></article>)}</div></div></>;
-  if(section === "reviews") return <div className="company-workspace-card"><SectionHead icon={<Star/>} title="Customer Reviews" text="Ratings attached to completed service bookings."/><div className="company-review-summary"><Star/><b>{value(partner?.rating,"No rating yet")}</b><p>Customer reviews will appear here after completed bookings.</p></div></div>;
-  if(section === "reports") return <div className="company-workspace-card"><SectionHead icon={<ReceiptIndianRupee/>} title="Business Reports" text="Download clean operational records."/><div className="company-report-grid"><button onClick={onDownload}><Download/><b>Bookings Report</b><small>Booking, customer, staff, amount and status CSV</small></button><button onClick={onDownload}><IndianRupee/><b>Earnings Report</b><small>Completed order revenue records</small></button><button onClick={onDownload}><Users/><b>Staff Activity Report</b><small>Assignments and team workload</small></button></div></div>;
-  return <div className="company-workspace-card"><SectionHead icon={<Settings/>} title="Company Settings" text="Verified business profile and account information."/><div className="company-settings-profile"><span><Building2/></span><div><small>Company</small><b>{value(((partner?.laundryBusiness||{}) as Row).shopName)}</b><p>{value(partner?.email)} · {value(partner?.phone)}</p><p>{value(((partner?.laundryBusiness||{}) as Row).shopLocation||partner?.serviceArea)}</p></div><em>Verified</em></div></div>;
-}
-function SectionHead({icon,title,text,action,onAction}:{icon:React.ReactNode;title:string;text:string;action?:string;onAction?:()=>void}){return <div className="company-workspace-head"><span>{icon}</span><div><h2>{title}</h2><p>{text}</p></div>{action?<button onClick={onAction}>+ {action}</button>:null}</div>}
-function Stat({label,value:statValue,tone}:{label:string;value:string|number;tone?:string}){return <article className={tone||""}><small>{label}</small><b>{statValue}</b></article>}
-function BookingRow({ booking, onAssign }: { booking: Row; onAssign: () => void }) { const snapshot = (booking.userSnapshot || {}) as Row; const assignment = (booking.laundryAssignment || {}) as Row; return <tr><td><b className="booking-code">{value(booking.bookingCode || idOf(booking))}</b></td><td><div className="company-customer-cell"><i>{initials(booking.userName || snapshot.name)}</i><span><b>{value(booking.userName || snapshot.name, "Customer")}</b><small>{value(booking.userPhone || snapshot.phone, "")}</small></span></div></td><td>{value(booking.serviceName || booking.serviceCategory)}</td><td>{readableDate(booking.slot || booking.createdAt)}</td><td><b>{rupees(booking.finalAmount || booking.price)}</b></td><td><span className={`company-table-status status-${String(booking.status || "pending").toLowerCase()}`}>{statusLabel(booking.status)}<ChevronDown /></span></td><td>{assignment.staffName ? <span><b>{value(assignment.staffName)}</b><small className="block text-[10px] text-slate-400">Currently Assigned</small></span> : "—"}</td><td><button className={assignment.staffName ? "outline" : ""} onClick={onAssign}>{assignment.staffName ? "Reassign" : "Assign Staff"}</button></td></tr>; }
-function TableEmpty() { return <div className="company-table-empty"><CalendarDays /><b>No bookings yet</b><p>Real customer bookings will appear here automatically. No default data is shown.</p></div>; }
-function IncomingModal({ booking, onClose, onAssign }: { booking: Row; onClose: () => void; onAssign: () => void }) { const snapshot = (booking.userSnapshot || {}) as Row; return <div className="company-modal-layer"><button className="company-modal-shade" onClick={onClose} aria-label="Close" /><div className="company-incoming-modal"><div className="company-modal-heading"><span><CalendarDays /></span><div><h2>New Booking Received</h2><em>Pending</em></div><button onClick={onClose}><X /></button></div><div className="company-modal-body"><p>Booking ID: <b>{value(booking.bookingCode || idOf(booking))}</b></p><div className="company-modal-customer"><i>{initials(booking.userName || snapshot.name)}</i><span><b>{value(booking.userName || snapshot.name, "Customer")}</b><small>{value(booking.userPhone || snapshot.phone, "Phone protected")}</small></span><button><Phone />Call Customer</button></div><h3>Booking Details</h3><dl><div><dt>Service</dt><dd>{value(booking.serviceName || booking.serviceCategory)}</dd></div><div><dt>Date &amp; Time</dt><dd>{readableDate(booking.slot || booking.createdAt)}</dd></div><div><dt>Address</dt><dd>{value(booking.address)}</dd></div></dl>{booking.issue ? <div className="company-customer-note"><b>Customer Note</b><p>{value(booking.issue)}</p></div> : null}<div className="company-modal-actions"><button onClick={onClose}><Eye />View Booking</button><button className="primary" onClick={onAssign}><UserRound />Assign Staff</button></div></div></div></div>; }
-function AssignModal({ booking, staff, selected, onSelected, onClose, onSubmit }: { booking: Row; staff: Row[]; selected: string; onSelected: (value: string) => void; onClose: () => void; onSubmit: () => void }) { return <div className="company-modal-layer top"><button className="company-modal-shade" onClick={onClose} aria-label="Close" /><div className="company-assign-modal"><button className="close" onClick={onClose}><X /></button><span><Users /></span><h2>Assign Staff</h2><p>{value(booking.bookingCode || idOf(booking))} ke liye verified staff choose karein.</p>{staff.length === 0 ? <div className="company-form-error">No staff available. Add staff from the Partner App first.</div> : <select value={selected} onChange={(event) => onSelected(event.target.value)}><option value="">Select staff member</option>{staff.map((member) => <option key={value(member.sequence)} value={value(member.sequence)}>{value(member.name)} — {member.isOnline ? "Available" : "Offline"}</option>)}</select>}<button className="submit" disabled={!selected} onClick={onSubmit}>Confirm Assignment</button></div></div>; }
-
-function AddStaffModal({ saving, onClose, onSubmit }: { saving: boolean; onClose: () => void; onSubmit: (form: { name: string; phone: string; email: string; role: string; photo: File; identity: File; idType: string }) => void }) {
-  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); const [role, setRole] = useState("Service Staff"); const [idType, setIdType] = useState("Government ID"); const [photo, setPhoto] = useState<File | null>(null); const [identity, setIdentity] = useState<File | null>(null); const [localError, setLocalError] = useState("");
-  function submit(event: React.FormEvent) { event.preventDefault(); if (name.trim().length < 2 || !/^[6-9]\d{9}$/.test(phone) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !photo || !identity) { setLocalError("Complete all fields with a valid 10-digit phone, email, photo and government ID."); return; } onSubmit({ name: name.trim(), phone, email: email.trim().toLowerCase(), role: role.trim() || "Service Staff", photo, identity, idType }); }
-  return <div className="company-modal-layer top"><button className="company-modal-shade" onClick={onClose} aria-label="Close"/><form className="company-staff-modal" onSubmit={submit}><button type="button" className="close" onClick={onClose}><X/></button><div className="company-staff-modal-head"><span><Users/></span><div><small>Team management</small><h2>Add New Staff</h2><p>Staff can login to the Partner App using this phone or Google email.</p></div></div><div className="company-staff-form-grid"><label><b>Staff Name *</b><span><UserRound/><input value={name} onChange={(e)=>setName(e.target.value)} placeholder="Enter full name"/></span></label><label><b>Role *</b><span><Users/><input value={role} onChange={(e)=>setRole(e.target.value)} placeholder="Service Staff"/></span></label><label><b>Phone Number *</b><span><Phone/><input value={phone} onChange={(e)=>setPhone(e.target.value.replace(/\D/g,"").slice(0,10))} inputMode="numeric" placeholder="10-digit mobile number"/></span></label><label><b>Email Address *</b><span><Mail/><input value={email} onChange={(e)=>setEmail(e.target.value)} type="email" placeholder="staff@example.com"/></span></label></div><div className="company-staff-upload-grid"><label><input hidden type="file" accept="image/png,image/jpeg" onChange={(e)=>setPhoto(e.target.files?.[0]||null)}/><span><Camera/></span><div><b>Profile Photo *</b><small>{photo?.name || "JPG or PNG, max 5MB"}</small><em>{photo ? "Replace photo" : "Choose photo"}</em></div></label><label><input hidden type="file" accept="image/png,image/jpeg,application/pdf" onChange={(e)=>setIdentity(e.target.files?.[0]||null)}/><span><IdCard/></span><div><b>Government ID *</b><small>{identity?.name || "Aadhaar, PAN, Voter ID or other"}</small><em>{identity ? "Replace document" : "Upload document"}</em></div></label></div><label className="company-staff-id-type"><b>ID Type</b><select value={idType} onChange={(e)=>setIdType(e.target.value)}><option>Government ID</option><option>Aadhaar Card</option><option>PAN Card</option><option>Voter ID</option><option>Driving Licence</option></select></label>{localError ? <div className="company-form-error">{localError}</div>:null}<button className="company-staff-save" disabled={saving}>{saving ? "Creating staff account..." : "Add Staff Member"}</button><p className="company-staff-login-note"><ShieldCheck/>Login access will be securely linked to the entered phone number or email.</p></form></div>;
+function AddStaffModal({
+  saving,
+  onClose,
+  onSubmit,
+}: {
+  saving: boolean;
+  onClose: () => void;
+  onSubmit: (form: {
+    name: string;
+    phone: string;
+    email: string;
+    role: string;
+    photo: File;
+    identity: File;
+    idType: string;
+  }) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("Service Staff");
+  const [idType, setIdType] = useState("Government ID");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [identity, setIdentity] = useState<File | null>(null);
+  const [localError, setLocalError] = useState("");
+  function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (
+      name.trim().length < 2 ||
+      !/^[6-9]\d{9}$/.test(phone) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+      !photo ||
+      !identity
+    ) {
+      setLocalError(
+        "Complete all fields with a valid 10-digit phone, email, photo and government ID.",
+      );
+      return;
+    }
+    onSubmit({
+      name: name.trim(),
+      phone,
+      email: email.trim().toLowerCase(),
+      role: role.trim() || "Service Staff",
+      photo,
+      identity,
+      idType,
+    });
+  }
+  return (
+    <div className="company-modal-layer top">
+      <button
+        className="company-modal-shade"
+        onClick={onClose}
+        aria-label="Close"
+      />
+      <form className="company-staff-modal" onSubmit={submit}>
+        <button type="button" className="close" onClick={onClose}>
+          <X />
+        </button>
+        <div className="company-staff-modal-head">
+          <span>
+            <Users />
+          </span>
+          <div>
+            <small>Team management</small>
+            <h2>Add New Staff</h2>
+            <p>
+              Staff can login to the Partner App using this phone or Google
+              email.
+            </p>
+          </div>
+        </div>
+        <div className="company-staff-form-grid">
+          <label>
+            <b>Staff Name *</b>
+            <span>
+              <UserRound />
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter full name"
+              />
+            </span>
+          </label>
+          <label>
+            <b>Role *</b>
+            <span>
+              <Users />
+              <input
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder="Service Staff"
+              />
+            </span>
+          </label>
+          <label>
+            <b>Phone Number *</b>
+            <span>
+              <Phone />
+              <input
+                value={phone}
+                onChange={(e) =>
+                  setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))
+                }
+                inputMode="numeric"
+                placeholder="10-digit mobile number"
+              />
+            </span>
+          </label>
+          <label>
+            <b>Email Address *</b>
+            <span>
+              <Mail />
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                placeholder="staff@example.com"
+              />
+            </span>
+          </label>
+        </div>
+        <div className="company-staff-upload-grid">
+          <label>
+            <input
+              hidden
+              type="file"
+              accept="image/png,image/jpeg"
+              onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+            />
+            <span>
+              <Camera />
+            </span>
+            <div>
+              <b>Profile Photo *</b>
+              <small>{photo?.name || "JPG or PNG, max 5MB"}</small>
+              <em>{photo ? "Replace photo" : "Choose photo"}</em>
+            </div>
+          </label>
+          <label>
+            <input
+              hidden
+              type="file"
+              accept="image/png,image/jpeg,application/pdf"
+              onChange={(e) => setIdentity(e.target.files?.[0] || null)}
+            />
+            <span>
+              <IdCard />
+            </span>
+            <div>
+              <b>Government ID *</b>
+              <small>
+                {identity?.name || "Aadhaar, PAN, Voter ID or other"}
+              </small>
+              <em>{identity ? "Replace document" : "Upload document"}</em>
+            </div>
+          </label>
+        </div>
+        <label className="company-staff-id-type">
+          <b>ID Type</b>
+          <select value={idType} onChange={(e) => setIdType(e.target.value)}>
+            <option>Government ID</option>
+            <option>Aadhaar Card</option>
+            <option>PAN Card</option>
+            <option>Voter ID</option>
+            <option>Driving Licence</option>
+          </select>
+        </label>
+        {localError ? (
+          <div className="company-form-error">{localError}</div>
+        ) : null}
+        <button className="company-staff-save" disabled={saving}>
+          {saving ? "Creating staff account..." : "Add Staff Member"}
+        </button>
+        <p className="company-staff-login-note">
+          <ShieldCheck />
+          Login access will be securely linked to the entered phone number or
+          email.
+        </p>
+      </form>
+    </div>
+  );
 }
