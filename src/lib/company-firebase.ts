@@ -1,7 +1,13 @@
 "use client";
 
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { browserLocalPersistence, getAuth, GoogleAuthProvider, setPersistence } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  browserPopupRedirectResolver,
+  initializeAuth,
+  GoogleAuthProvider,
+  type Auth,
+} from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.trim(),
@@ -13,17 +19,24 @@ const firebaseConfig = {
 };
 
 const companyFirebaseAppName = "apnaservo-company-dashboard";
+let cachedCompanyAuth: Auth | undefined;
 
 export function companyFirebaseAuth() {
   if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId || !firebaseConfig.appId) {
     throw new Error("Firebase web configuration is missing.");
   }
+  if (cachedCompanyAuth) return cachedCompanyAuth;
+
   const app = getApps().some((entry) => entry.name === companyFirebaseAppName)
     ? getApp(companyFirebaseAppName)
     : initializeApp(firebaseConfig, companyFirebaseAppName);
-  const auth = getAuth(app);
-  void setPersistence(auth, browserLocalPersistence);
-  return auth;
+
+  cachedCompanyAuth = initializeAuth(app, {
+    persistence: browserLocalPersistence,
+    popupRedirectResolver: browserPopupRedirectResolver,
+  });
+
+  return cachedCompanyAuth;
 }
 
 export const companyGoogleProvider = new GoogleAuthProvider();
