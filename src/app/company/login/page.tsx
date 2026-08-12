@@ -38,7 +38,8 @@ export default function CompanyLoginPage() {
         "auth/popup-closed-by-user": "Google sign-in was cancelled.",
         "auth/internal-error": "Google sign-in could not start. Please reload once and try again.",
       };
-      setError(messages[caught.code] || `Google sign-in failed (${caught.code}).`);
+      const friendly = messages[caught.code] || "Google sign-in failed.";
+      setError(`${friendly} (${caught.code}: ${caught.message})`);
     } else {
       setError(caught instanceof Error ? caught.message : "Google login failed. Please try again.");
     }
@@ -62,7 +63,10 @@ export default function CompanyLoginPage() {
     } catch (caught) {
       // Some mobile browsers block a popup. Redirect remains a supported
       // fallback, while normal desktop login completes without a redirect.
-      if (caught instanceof FirebaseError && caught.code === "auth/popup-blocked") {
+      if (
+        caught instanceof FirebaseError &&
+        ["auth/popup-blocked", "auth/internal-error", "auth/web-storage-unsupported"].includes(caught.code)
+      ) {
         try {
           await signInWithRedirect(companyFirebaseAuth(), companyGoogleProvider);
           return;
