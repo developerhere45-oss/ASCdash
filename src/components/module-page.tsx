@@ -693,6 +693,8 @@ function PartnerDetailPanel({
 
   const partner = data?.partner || row;
   const laundryBusiness = asRecord(partner.laundryBusiness);
+  const termsConsent = asRecord(partner.termsConsent);
+  const termsHistory = Array.isArray(partner.termsAcceptanceHistory) ? partner.termsAcceptanceHistory.map(asRecord) : [];
   const laundryStaffMembers = (Array.isArray(partner.laundryStaffMembers)
     ? partner.laundryStaffMembers
     : Array.isArray(laundryBusiness.staffMembers) ? laundryBusiness.staffMembers : [])
@@ -877,6 +879,33 @@ function PartnerDetailPanel({
                   <span className="break-words font-black text-[#111827]">{formatValue(String(label), value)}</span>
                 </div>
               ))}
+            </div>
+            <div className="border-t border-[#edf0f6] bg-[#f8fbff] p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-black text-[#111827]">Terms &amp; Conditions Consent</h4>
+                  <p className="mt-0.5 text-xs font-semibold text-[#667085]">Registration consent received from Partner App.</p>
+                </div>
+                <Status value={termsConsent.accepted === true ? "Accepted" : "Not Accepted"} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {[
+                  ["Registration Flow", termsConsent.registrationFlow],
+                  ["Service", termsConsent.serviceCategory],
+                  ["Terms Version", termsConsent.version],
+                  ["Server Accepted At", termsConsent.acceptedAt],
+                  ["Client Accepted At", termsConsent.clientAcceptedAt],
+                  ["Source App", termsConsent.sourceApp],
+                  ["Document", termsConsent.documentKey],
+                  ["IP Address", termsConsent.ipAddress],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="rounded-lg border border-[#e1e8f5] bg-white p-3">
+                    <p className="text-[11px] font-black uppercase tracking-wide text-[#667085]">{String(label)}</p>
+                    <p className="mt-1 break-words text-sm font-black text-[#111827]">{String(label).includes("At") ? formatDate(value) : asText(value)}</p>
+                  </div>
+                ))}
+              </div>
+              {termsHistory.length > 1 ? <p className="mt-3 text-xs font-bold text-[#667085]">Consent audit entries: {termsHistory.length}</p> : null}
             </div>
             {isLaundryPartner ? (
               <div className="border-t border-[#edf0f6] bg-[#fffafa] p-4">
