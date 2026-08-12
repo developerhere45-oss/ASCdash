@@ -4,10 +4,65 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, ShieldCheck } from "lucide-react";
 import { FirebaseError } from "firebase/app";
-import { getRedirectResult, signInWithPopup, signInWithRedirect, type User } from "firebase/auth";
+import { getRedirectResult, GoogleAuthProvider, signInWithCredential, signInWithPopup, type User } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { CompanyBrand, GoogleMark } from "@/components/company/company-brand";
 import { companyBackendUrl, companyFirebaseAuth, companyGoogleProvider } from "@/lib/company-firebase";
+
+const googleWebClientId =
+  process.env.NEXT_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+  "525255192682-0n4dnbed39j3h1706j6u5egr2so595up.apps.googleusercontent.com";
+
+type GoogleIdentityApi = {
+  accounts: {
+    oauth2: {
+      initTokenClient: (options: {
+        client_id: string;
+        scope: string;
+        callback: (response: { access_token?: string; error?: string }) => void;
+        error_callback?: (error: { type?: string }) => void;
+      }) => { requestAccessToken: (options?: { prompt?: string }) => void };
+    };
+  };
+};
+
+declare global {
+  interface Window {
+    google?: GoogleIdentityApi;
+  }
+}
+
+function loadGoogleIdentity(): Promise<GoogleIdentityApi> {
+  if (window.google) return Promise.resolve(window.google);
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-google-identity="true"]');
+    const script = existing || document.createElement("script");
+    const done = () => window.google ? resolve(window.google) : reject(new Error("Google Identity did not initialize."));
+    script.addEventListener("load", done, { once: true });
+    script.addEventListener("error", () => reject(new Error("Google Identity could not load.")), { once: true });
+    if (!existing) {
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleIdentity = "true";
+      document.head.appendChild(script);
+    }
+  });
+}
+
+async function signInWithGoogleIdentity() {
+  const google = await loadGoogleIdentity();
+  const accessToken = await new Promise<string>((resolve, reject) => {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: googleWebClientId,
+      scope: "openid email profile",
+      callback: (response) => response.access_token ? resolve(response.access_token) : reject(new Error(response.error || "Google did not return an access token.")),
+      error_callback: (error) => reject(new Error(`Google sign-in popup failed: ${error.type || "unknown error"}`)),
+    });
+    client.requestAccessToken({ prompt: "select_account" });
+  });
+  return signInWithCredential(companyFirebaseAuth(), GoogleAuthProvider.credential(null, accessToken));
+}
 
 export default function CompanyLoginPage() {
   const router = useRouter();
@@ -63,15 +118,13 @@ export default function CompanyLoginPage() {
     } catch (caught) {
       // Some mobile browsers block a popup. Redirect remains a supported
       // fallback, while normal desktop login completes without a redirect.
-      if (
-        caught instanceof FirebaseError &&
-        ["auth/popup-blocked", "auth/internal-error", "auth/web-storage-unsupported"].includes(caught.code)
-      ) {
+      if (caught instanceof FirebaseError) {
         try {
-          await signInWithRedirect(companyFirebaseAuth(), companyGoogleProvider);
+          const result = await signInWithGoogleIdentity();
+          await finishCompanyLogin(result.user);
           return;
-        } catch (redirectError) {
-          showLoginError(redirectError);
+        } catch (credentialError) {
+          showLoginError(credentialError);
         }
       } else {
         showLoginError(caught);
