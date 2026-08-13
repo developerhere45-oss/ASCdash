@@ -20,7 +20,10 @@ export default function CompanyRegisterPage() {
   const [error, setError] = useState("");
   const canSubmit = useMemo(() => form.companyName && form.licenseNumber && form.ownerName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.ownerEmail) && /^\d{10}$/.test(form.ownerMobile) && form.address && areas.length > 0 && files.license && files.ownerId && files.logo && termsAccepted, [form, areas, files, termsAccepted]);
 
-  function update(key: keyof typeof form, value: string) { setForm((current) => ({ ...current, [key]: value })); }
+  function update(key: keyof typeof form, value: string) {
+    setForm((current) => ({ ...current, [key]: value }));
+    if (error) setError("");
+  }
   function addArea() {
     const value = form.areaDraft.trim();
     if (!value || areas.some((area) => area.toLowerCase() === value.toLowerCase())) return;
@@ -37,7 +40,17 @@ export default function CompanyRegisterPage() {
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!termsAccepted) { setError("Please accept the Partner Terms, Privacy Policy and Service Agreement to continue."); return; }
-    if (!canSubmit) { setError("Please complete every required field, coverage area and document."); return; }
+    if (!form.companyName.trim()) { setError("Please enter the company name."); return; }
+    if (!form.licenseNumber.trim()) { setError("Please enter the business license number."); return; }
+    if (!form.ownerName.trim()) { setError("Please enter the owner name."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.ownerEmail)) { setError("Please enter a valid owner email address."); return; }
+    if (!/^\d{10}$/.test(form.ownerMobile)) { setError("Please enter a valid 10-digit owner mobile number."); return; }
+    if (!form.address.trim()) { setError("Please enter the complete company address."); return; }
+    if (areas.length === 0) { setError("Please add at least one company coverage area."); return; }
+    if (!files.license) { setError("Please upload the business license document."); return; }
+    if (!files.ownerId) { setError("Please upload the owner ID proof."); return; }
+    if (!files.logo) { setError("Please upload the company logo."); return; }
+    if (!canSubmit) { setError("Please review the registration details and try again."); return; }
     setLoading(true); setError("");
     try {
       const user = (await signInAnonymously(companyFirebaseAuth())).user;
