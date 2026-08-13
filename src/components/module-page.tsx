@@ -693,45 +693,16 @@ function PartnerDetailPanel({
 
   const partner = data?.partner || row;
   const laundryBusiness = asRecord(partner.laundryBusiness);
-  const cleaningBusiness = asRecord(partner.cleaningBusiness || partner.companyBusiness || partner.business);
   const termsConsent = asRecord(partner.termsConsent);
   const termsHistory = Array.isArray(partner.termsAcceptanceHistory) ? partner.termsAcceptanceHistory.map(asRecord) : [];
   const laundryStaffMembers = (Array.isArray(partner.laundryStaffMembers)
     ? partner.laundryStaffMembers
     : Array.isArray(laundryBusiness.staffMembers) ? laundryBusiness.staffMembers : [])
     .map(asRecord);
-  const cleaningStaffMembers = (Array.isArray(partner.cleaningStaffMembers)
-    ? partner.cleaningStaffMembers
-    : Array.isArray(partner.staffMembers)
-      ? partner.staffMembers
-      : Array.isArray(cleaningBusiness.staffMembers) ? cleaningBusiness.staffMembers : [])
-    .map(asRecord);
-  const staffActivity = data?.staffActivity || [];
-  const activityStaffMembers = staffActivity.map((item) => asRecord(item.staff));
-  const rawOwnerStaffMembers = laundryStaffMembers.length > 0
-    ? laundryStaffMembers
-    : cleaningStaffMembers.length > 0
-      ? cleaningStaffMembers
-      : activityStaffMembers;
-  const ownerStaffMembers: Record<string, unknown>[] = rawOwnerStaffMembers.map((staff, index) => ({
-    ...staff,
-    sequence: staff.sequence || staff.staffSequence || index + 1,
-    name: staff.name || staff.fullName || staff.staffName,
-    phone: staff.phone || staff.mobileNumber || staff.mobile,
-    role: staff.role || staff.designation || staff.serviceRole,
-    verificationStatus: staff.verificationStatus || staff.kycStatus || staff.status,
-    isOnline: staff.isOnline ?? staff.available ?? staff.isAvailable ?? false,
-    photoUrl: staff.photoUrl || staff.profilePhoto || staff.avatarUrl,
-    idType: staff.idType || staff.identityType,
-    idNumber: staff.idNumber || staff.identityNumber,
-  }));
-  const businessType = asText(partner.businessType || partner.professionServiceCategory).toLowerCase();
   const isLaundryPartner = asText(partner.businessType).toLowerCase() === "laundry"
     || asText(partner.professionServiceCategory).toLowerCase().includes("laundry")
     || laundryStaffMembers.length > 0;
-  const isCleaningOwner = businessType.includes("clean") || cleaningStaffMembers.length > 0;
-  const isOwnerCompany = isLaundryPartner || isCleaningOwner || ownerStaffMembers.length > 0;
-  const ownerTypeLabel = isLaundryPartner ? "Laundry" : "Cleaning";
+  const staffActivity = data?.staffActivity || [];
   const approvalState = partnerApprovalState(partner);
   const docs = data?.documents || [];
   const legacyLaundryStaffDocuments = docs.filter((document) => document.documentType === "laundry_staff_identity");
@@ -751,7 +722,7 @@ function PartnerDetailPanel({
     ["Staff Members", laundryStaffMembers.length],
     ["Verification Status", partner.businessVerificationStatus],
   ];
-  const laundryStaffRows = ownerStaffMembers.map((staff, index) => ({
+  const laundryStaffRows = laundryStaffMembers.map((staff, index) => ({
     staff,
     proof: laundryDocumentForStaff(staff, index),
     sequence: asText(staff.sequence) === "-" ? index + 1 : asText(staff.sequence),
@@ -791,17 +762,15 @@ function PartnerDetailPanel({
     ["Working Areas", partner.workingAreas],
     ["Service Area", partner.serviceArea],
     ["Languages Known", partner.languagesKnown],
-    ...(isOwnerCompany ? [
-      ["Business Type", partner.businessType || ownerTypeLabel],
-      ["Business Verification Status", partner.businessVerificationStatus],
-      ["Total Staff Members", ownerStaffMembers.length],
-    ] as Array<[string, unknown]> : []),
     ...(isLaundryPartner ? [
+      ["Business Type", partner.businessType || "Laundry"],
+      ["Business Verification Status", partner.businessVerificationStatus],
       ["Laundry Shop Name", partner.laundryShopName || laundryBusiness.shopName],
       ["Shop License Number", partner.laundryShopLicenseNumber || laundryBusiness.shopLicenseNumber],
       ["Laundry Shop Location", partner.laundryShopLocation || laundryBusiness.shopLocation],
       ["Laundry Owner Name", partner.laundryOwnerName || laundryBusiness.ownerName],
       ["Laundry Owner Phone", partner.laundryOwnerPhone || laundryBusiness.ownerPhone],
+      ["Laundry Staff Members", laundryStaffMembers.length],
     ] as Array<[string, unknown]> : []),
     ["Registration Date", partner.registrationDate],
     ["Current Verification Status", partner.currentVerificationStatus],
@@ -879,7 +848,7 @@ function PartnerDetailPanel({
           </div>
         </div>
         <div className="flex gap-2 border-b border-[#edf0f6] px-4 py-3 text-xs font-black">
-          {(isOwnerCompany
+          {(isLaundryPartner
             ? (["Overview", "Staff", "Documents", "History", "Activity"] as PartnerDetailTab[])
             : (["Overview", "Documents", "History", "Activity"] as PartnerDetailTab[])
           ).map((tab) => (
@@ -1039,19 +1008,14 @@ function PartnerDetailPanel({
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#edf0f6] bg-white p-4">
                 <div className="flex items-center gap-3">
                   <span className="grid h-10 w-10 place-items-center rounded-lg bg-[#fff0f4] text-[#d92d4b]"><Users size={19} /></span>
-                  <div><h3 className="text-base font-black text-[#111827]">{ownerTypeLabel} Staff &amp; Live Activity</h3><p className="mt-0.5 text-xs font-semibold text-[#667085]">Identity, verification, availability, assigned orders and route updates.</p></div>
+                  <div><h3 className="text-base font-black text-[#111827]">Laundry Staff & Live Activity</h3><p className="mt-0.5 text-xs font-semibold text-[#667085]">Identity, verification, availability, assigned orders and route updates.</p></div>
                 </div>
-                <span className="rounded-full bg-[#eef5ff] px-3 py-1.5 text-xs font-black text-[#0b6df6]">{ownerStaffMembers.length} staff members</span>
+                <span className="rounded-full bg-[#eef5ff] px-3 py-1.5 text-xs font-black text-[#0b6df6]">{laundryStaffMembers.length} staff members</span>
               </div>
-              {ownerStaffMembers.length === 0 ? (
-                <div className="grid min-h-[260px] place-items-center rounded-lg border border-[#edf0f6] bg-[#fbfcff] p-8 text-center"><div><Users className="mx-auto text-[#98a2b3]" size={42} /><p className="mt-4 text-sm font-black text-[#344054]">No staff registered</p><p className="mt-1 text-xs font-semibold text-[#667085]">Staff added by this {ownerTypeLabel.toLowerCase()} owner will appear here.</p></div></div>
-              ) : ownerStaffMembers.map((staff, index) => {
-                const record = staffActivity.find((item) => {
-                  const activityStaff = asRecord(item.staff);
-                  return Number(activityStaff.sequence || activityStaff.staffSequence) === Number(staff.sequence || index + 1)
-                    || (asText(activityStaff.id) !== "-" && asText(activityStaff.id) === asText(staff.id))
-                    || (asText(activityStaff.phone || activityStaff.mobileNumber) !== "-" && asText(activityStaff.phone || activityStaff.mobileNumber) === asText(staff.phone));
-                });
+              {laundryStaffMembers.length === 0 ? (
+                <div className="grid min-h-[260px] place-items-center rounded-lg border border-[#edf0f6] bg-[#fbfcff] p-8 text-center"><div><Users className="mx-auto text-[#98a2b3]" size={42} /><p className="mt-4 text-sm font-black text-[#344054]">No staff registered</p><p className="mt-1 text-xs font-semibold text-[#667085]">Staff added by this laundry owner will appear here.</p></div></div>
+              ) : laundryStaffMembers.map((staff, index) => {
+                const record = staffActivity.find((item) => Number(item.staff.sequence) === Number(staff.sequence || index + 1));
                 const metrics = record?.metrics || { totalAssigned: 0, activeOrders: 0, completedOrders: 0 };
                 const staffDetails: Array<[string, unknown]> = [
                   ["Staff Sequence", staff.sequence || index + 1], ["Full Name", staff.name], ["Mobile Number", staff.phone],
