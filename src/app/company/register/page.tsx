@@ -15,9 +15,10 @@ export default function CompanyRegisterPage() {
   const [form, setForm] = useState({ companyName: "", companyService: "cleaning", licenseNumber: "", ownerName: "", ownerEmail: "", ownerMobile: "", address: "", areaDraft: "" });
   const [areas, setAreas] = useState<string[]>([]);
   const [files, setFiles] = useState<Partial<Record<UploadKey, File>>>({});
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const canSubmit = useMemo(() => form.companyName && form.licenseNumber && form.ownerName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.ownerEmail) && /^\d{10}$/.test(form.ownerMobile) && form.address && areas.length > 0 && files.license && files.ownerId && files.logo, [form, areas, files]);
+  const canSubmit = useMemo(() => form.companyName && form.licenseNumber && form.ownerName && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.ownerEmail) && /^\d{10}$/.test(form.ownerMobile) && form.address && areas.length > 0 && files.license && files.ownerId && files.logo && termsAccepted, [form, areas, files, termsAccepted]);
 
   function update(key: keyof typeof form, value: string) { setForm((current) => ({ ...current, [key]: value })); }
   function addArea() {
@@ -35,6 +36,7 @@ export default function CompanyRegisterPage() {
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (!termsAccepted) { setError("Please accept the Partner Terms, Privacy Policy and Service Agreement to continue."); return; }
     if (!canSubmit) { setError("Please complete every required field, coverage area and document."); return; }
     setLoading(true); setError("");
     try {
@@ -46,7 +48,14 @@ export default function CompanyRegisterPage() {
           name: form.ownerName, phone: form.ownerMobile, email: form.ownerEmail.trim().toLowerCase(), businessType: "laundry",
           serviceCategory: [form.companyService], city: areas[0], serviceArea: form.address, workingAreas: areas,
           residentialAddress: form.address, isOnline: false,
-          laundryBusiness: { shopName: form.companyName, shopLicenseNumber: form.licenseNumber, shopLocation: form.address, ownerName: form.ownerName, ownerPhone: form.ownerMobile, staffMembers: [] }
+          laundryBusiness: { shopName: form.companyName, shopLicenseNumber: form.licenseNumber, shopLocation: form.address, ownerName: form.ownerName, ownerPhone: form.ownerMobile, staffMembers: [] },
+          termsAccepted: true,
+          termsVersion: "2026-07-25",
+          termsAcceptedAt: Date.now(),
+          termsRegistrationFlow: form.companyService === "cleaning" ? "cleaning_owner_registration" : "laundry_owner_registration",
+          termsServiceCategory: form.companyService,
+          termsDocumentKey: "partner_terms",
+          termsSourceApp: "company_web_dashboard"
         })
       });
       const payload = await response.json().catch(() => ({}));
@@ -101,8 +110,18 @@ export default function CompanyRegisterPage() {
           <UploadBox title="Owner ID Proof" note="PDF, JPG or PNG (Max. 5MB)" icon={<UserRound />} file={files.ownerId} accept=".pdf,image/png,image/jpeg" onFile={(file) => setFiles((v) => ({ ...v, ownerId: file }))} />
           <UploadBox title="Company Logo" note="JPG or PNG (Max. 5MB)" icon={<ImageIcon />} file={files.logo} accept="image/png,image/jpeg" onFile={(file) => setFiles((v) => ({ ...v, logo: file }))} />
         </div>
+        <label className={`company-terms-consent ${termsAccepted ? "accepted" : ""}`}>
+          <input type="checkbox" checked={termsAccepted} onChange={(event) => { setTermsAccepted(event.target.checked); if (event.target.checked) setError(""); }} />
+          <span aria-hidden="true"><ShieldCheck size={17} /></span>
+          <span>
+            I have read and agree to ApnaServo&apos;s{" "}
+            <a href="https://apnaservo.com/partner-terms-and-conditions" target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Partner Terms &amp; Conditions</a>,{" "}
+            <a href="https://apnaservo.com/privacy-policy" target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Privacy Policy</a>, and{" "}
+            <a href="https://apnaservo.com/terms-and-conditions" target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Service Agreement</a>.
+          </span>
+        </label>
         {error ? <div className="company-form-error">{error}</div> : null}
-        <button className="company-submit" disabled={loading}><Send size={18} />{loading ? "Submitting securely..." : "Submit for Verification"}</button>
+        <button className="company-submit" disabled={loading || !termsAccepted}><Send size={18} />{loading ? "Submitting securely..." : "Submit for Verification"}</button>
         <div className="company-secure-note"><LockKeyhole size={15} /> Your information is secure and only used for verification.</div>
       </form>
     </main>
