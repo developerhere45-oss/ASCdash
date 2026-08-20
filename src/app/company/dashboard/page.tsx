@@ -4,6 +4,7 @@ import Image from "next/image";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { io } from "socket.io-client";
 import {
   Bell,
   Building2,
@@ -172,6 +173,35 @@ export default function CompanyDashboardPage() {
     const timer = window.setInterval(() => void loadData(user, true), 5_000);
     return () => window.clearInterval(timer);
   }, [loadData, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    let closed = false;
+    let socket: ReturnType<typeof io> | null = null;
+    void user.getIdToken().then((token) => {
+      if (closed) return;
+      socket = io(companyBackendUrl, {
+        transports: ["websocket", "polling"],
+        auth: { role: "partner", token },
+      });
+      socket.on("booking:status_update", (payload: Row) => {
+        const incomingId = idOf(payload);
+        if (!incomingId) return;
+        setBookings((current) => {
+          const index = current.findIndex((booking) => idOf(booking) === incomingId
+            || String(booking.bookingCode || "") === String(payload.bookingCode || ""));
+          if (index < 0) return [payload, ...current];
+          const next = [...current];
+          next[index] = { ...next[index], ...payload };
+          return next;
+        });
+      });
+    }).catch(() => undefined);
+    return () => {
+      closed = true;
+      socket?.disconnect();
+    };
+  }, [user]);
 
   const business = (partner?.laundryBusiness || {}) as Row;
   const staff = Array.isArray(business.staffMembers)
