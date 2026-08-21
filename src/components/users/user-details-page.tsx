@@ -312,7 +312,7 @@ export function UserDetailsPage({ userId }: { userId: string }) {
                   <td className="px-4 py-3">{booking.assignedPartnerMobileNumber || "Not recorded"}</td>
                   <td className="max-w-[280px] px-4 py-3">{booking.customerAddress}</td>
                   <td className="max-w-[280px] px-4 py-3">{booking.customerNotes || "None"}</td>
-                  <td className="px-4 py-3 font-black">{formatCurrency(booking.finalServiceCost || 0)}</td>
+                  <td className="px-4 py-3 font-black">{Number(booking.finalServiceCost || 0) > 0 ? formatCurrency(booking.finalServiceCost) : "Not finalized"}</td>
                   <td className="px-4 py-3"><Badge value={booking.paymentStatus} /></td>
                 </tr>
               ))}

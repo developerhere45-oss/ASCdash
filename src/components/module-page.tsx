@@ -490,7 +490,7 @@ function BookingOperationsTable({ rows }: { rows: ResourceRow[] }) {
                   <p className="inline-flex items-center gap-2 font-black text-[#263149]"><Clock3 size={15} className="text-[#8b5cf6]" />{asText(row.scheduledDateTime)}</p>
                 </td>
                 <td className="px-5 py-4 align-top"><Status value={asText(row.status)} /></td>
-                <td className="px-5 py-4 align-top font-black text-[#111827]">{formatMoney(row.finalServiceCost)}</td>
+                <td className="px-5 py-4 align-top font-black text-[#111827]">{Number(row.finalServiceCost || 0) > 0 ? formatMoney(row.finalServiceCost) : "Not finalized"}</td>
                 <td className="px-5 py-4 align-top"><Status value={asText(row.paymentStatus)} /></td>
                 <td className="px-5 py-4 align-top">
                   <Link href={`/bookings/${encodeURIComponent(asText(row.id))}`} className="grid h-9 w-12 place-items-center rounded-lg border border-[#e6eaf2] bg-white text-[#0b6df6]"><Eye size={16} /></Link>
@@ -1247,7 +1247,7 @@ function PartnerDetailPanel({
                             <td className="px-3 py-4"><span className="inline-flex items-center gap-2 font-bold text-[#263149]"><Wrench size={14} className="text-[#667085]" />{asText(booking.serviceName || booking.serviceCategory || booking.service)}</span></td>
                             <td className="px-3 py-4 font-semibold text-[#344054]">{asText(booking.customerName || booking.customer || booking.userName)}</td>
                             <td className="px-3 py-4 font-semibold text-[#344054]"><span className="block">{shortDate(booking.createdAt || booking.bookingDateTime)}</span><span className="mt-1 block text-[#667085]">{shortTime(booking.createdAt || booking.bookingDateTime)}</span></td>
-                            <td className="px-3 py-4 font-black text-[#111827]">{formatMoney(booking.finalAmount || booking.finalServiceCost || booking.amount)}</td>
+                            <td className="px-3 py-4 font-black text-[#111827]">{Number(booking.finalAmount || booking.finalServiceCost || 0) > 0 ? formatMoney(booking.finalAmount || booking.finalServiceCost) : "Not finalized"}</td>
                             <td className="px-3 py-4"><Status value={asText(booking.status || booking.bookingStatus)} /></td>
                           </tr>
                         ))}

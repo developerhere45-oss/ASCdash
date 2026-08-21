@@ -32,6 +32,8 @@ type BookingDetails = {
   customerAddress: string;
   customerNotes: string;
   finalServiceCost: number;
+  proposedServiceCost: number;
+  estimatedServiceCost: number;
   paymentStatus: string;
   timeline: TimelineEvent[];
 };
@@ -73,6 +75,14 @@ export function BookingTimelinePage({ bookingId }: { bookingId: string }) {
   if (isLoading) return <div className="admin-card p-10 text-center font-bold text-[#667085]">Loading booking timeline...</div>;
   if (isError || !booking) return <div className="admin-card p-10 text-center font-bold text-[#d92d4b]">Booking timeline was not returned by the live backend.</div>;
 
+  const displayedCost = booking.finalServiceCost > 0
+    ? { label: "Final Service Cost", value: formatCurrency(booking.finalServiceCost) }
+    : booking.proposedServiceCost > 0
+      ? { label: "Proposed Service Cost", value: formatCurrency(booking.proposedServiceCost) }
+      : booking.estimatedServiceCost > 0
+        ? { label: "Estimated Starting Cost", value: formatCurrency(booking.estimatedServiceCost) }
+        : { label: "Service Cost", value: "Not recorded" };
+
   const details = [
     ["Service Category", booking.serviceCategory, Wrench],
     ["Service Name", booking.serviceName, Wrench],
@@ -84,7 +94,7 @@ export function BookingTimelinePage({ bookingId }: { bookingId: string }) {
     ["Partner Mobile", booking.assignedPartnerMobileNumber || "Not recorded", Phone],
     ["Customer Address", booking.customerAddress || "Not recorded", MapPin],
     ["Customer Notes", booking.customerNotes || "None", MessageSquareText],
-    ["Final Service Cost", formatCurrency(booking.finalServiceCost || 0), CreditCard],
+    [displayedCost.label, displayedCost.value, CreditCard],
     ["Payment Status", booking.paymentStatus || "pending", CreditCard],
   ] as const;
 
